@@ -221,8 +221,17 @@ namespace ImageApp
 						break;
 						case ProcessingFunctions.EdgeMagnitude:
 						{
-							sbyte[,] horizontalKernel = null; // Define this kernel yourself
-							sbyte[,] verticalKernel = null; // Define this kernel yourself
+							// Prewitt kernels for edge detection.
+							sbyte[,] horizontalKernel = { 
+								{ -1, 0, 1 },
+								{ -1, 0, 1 },
+								{ -1, 0, 1 }	
+							}; 
+							sbyte[,] verticalKernel = {
+								{ -1, -1, -1 },
+								{ 0, 0, 0 },
+								{ 1, 1, 1 },
+							}; 
 							gray = EdgeMagnitude(gray, horizontalKernel, verticalKernel);
 							break;
 						}
@@ -445,8 +454,8 @@ namespace ImageApp
 			int w = inputImage.GetLength(0);
 			int h = inputImage.GetLength(1);
 
-			int filter_size = filter.GetLength(0);
-			int filter_center = (filter_size-1) / 2;
+			int filterSize = filter.GetLength(0);
+			int filterCenter = (filterSize-1) / 2;
 
 			// Iterate the image in (x,y), and apply a mirroring-filter to it.
 			for (int x = 0; x < w; x++)
@@ -455,11 +464,11 @@ namespace ImageApp
 				// Sum all the values in the filter for this pixel.
 				float sum = 0;
 
-				for (int i = 0; i < filter_size; i++)
-				for (int j = 0; j < filter_size; j++)
+				for (int i = 0; i < filterSize; i++)
+				for (int j = 0; j < filterSize; j++)
 				{
-					int sx = MirrorRepeat(x + i - filter_center, w);
-					int sy = MirrorRepeat(y + j - filter_center, h);
+					int sx = MirrorRepeat(x + i - filterCenter, w);
+					int sy = MirrorRepeat(y + j - filterCenter, h);
 
 					sum += inputImage[sx, sy] * filter[i, j];
 				}
@@ -480,8 +489,28 @@ namespace ImageApp
 		{
 			// create temporary grayscale image
 			byte[,] tempImage = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
 
-			// TODO: add your functionality and checks, think about border handling
+			int center = (kernelSize-1) / 2;
+			int meanIndex = (kernelSize * kernelSize - 1) / 2;
+			byte[] meanBuffer = new byte[kernelSize * kernelSize];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				for (int i = 0; i < kernelSize; i++)
+				for (int j = 0; j < kernelSize; j++)
+				{
+					int sx = MirrorRepeat(x + i - center, w);
+					int sy = MirrorRepeat(y + j - center, h);
+					meanBuffer[i + j * kernelSize] = inputImage[sx, sy];
+				}
+
+				// Sort the pixels to find the mean.
+				Array.Sort(meanBuffer);
+				tempImage[x, y] = meanBuffer[meanIndex];
+			}
 
 			return tempImage;
 		}
@@ -502,7 +531,54 @@ namespace ImageApp
 			// create temporary grayscale image
 			byte[,] tempImage = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
 
-			// TODO: add your functionality and checks, think about border handling and type conversion (negative values!)
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+
+			// Centers of our edge kernels.
+			int hCenterX = (horizontalKernel.GetLength(0)-1) / 2;
+			int hCenterY = (horizontalKernel.GetLength(1)-1) / 2;
+
+			int vCenterX = (verticalKernel.GetLength(0)-1) / 2;
+			int vCenterY = (verticalKernel.GetLength(1)-1) / 2;
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				// Compute the two derivatives.
+				// Keep track of the sums of the kernels.
+				float dx = 0;
+				int hSum = 0;
+
+				for (int i = 0; i < horizontalKernel.GetLength(0); i++)
+				for (int j = 0; j < horizontalKernel.GetLength(1); j++)
+				{
+					int sx = MirrorRepeat(x + i - hCenterX, w);
+					int sy = MirrorRepeat(y + j - hCenterY, h);
+					
+					int val = horizontalKernel[i, j];
+					hSum += Math.Abs(val);
+					dx += inputImage[sx, sy] * val;
+				}
+				dx /= hSum;
+
+				float dy = 0;
+				int vSum = 0;
+
+				for (int i = 0; i < verticalKernel.GetLength(0); i++)
+				for (int j = 0; j < verticalKernel.GetLength(1); j++)
+				{
+					int sx = MirrorRepeat(x + i - vCenterX, w);
+					int sy = MirrorRepeat(y + j - vCenterY, h);
+					
+					int val = verticalKernel[i, j];
+					vSum += Math.Abs(val);
+					dy += inputImage[sx, sy] * val;
+				}
+				dy /= vSum;
+
+				float intensity = MathF.Sqrt(dx * dx + dy * dy);
+				tempImage[x, y] = (byte)Math.Min(intensity, 255);
+			}
 
 			return tempImage;
 		}
