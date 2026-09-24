@@ -42,6 +42,7 @@
       <Button Content="Save Image" Width="110" Click="OnSaveImage"/>
       <ComboBox x:Name="OperationBox" Width="240"/>
       <Button x:Name="ApplyButton" Content="Apply" Width="100" Click="OnApply"/>
+      <Button x:Name="TogglePixelArtButton" Content="Toggle Filtering" Width="150" Click="OnToggledPixelArt"/>
     </StackPanel>
 
     <!--

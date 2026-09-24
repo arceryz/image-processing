@@ -2,6 +2,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
@@ -17,6 +18,9 @@ namespace ImageApp
 		// Simple fixed defaults used by the functions below until you add your own
 		// GUI controls (TextBoxes, ComboBoxes, etc.) to let the user set these values.
 		private byte _threshold = 128;
+
+		// If true, uses nearest neighbor filtering for images for debugging of morphological filters.
+		private bool _pixelArtMode = false;
 
 		// Enum for operations. As you implement each function, add a case for it
 		// in OnApply below; the dropdown is populated automatically from this list.
@@ -166,6 +170,23 @@ namespace ImageApp
 			}
 		}
 
+		private void OnToggledPixelArt(object? sender, RoutedEventArgs e)
+		{
+			_pixelArtMode = !_pixelArtMode;
+			var interpolationMode = _pixelArtMode ? BitmapInterpolationMode.None: BitmapInterpolationMode.Unspecified;
+			var edgeMode = _pixelArtMode ? EdgeMode.Aliased: EdgeMode.Unspecified;
+	
+			RenderOptions.SetBitmapInterpolationMode(OriginalImage, interpolationMode);
+			RenderOptions.SetEdgeMode(OriginalImage, edgeMode);
+			RenderOptions.SetBitmapInterpolationMode(ProcessedImage, interpolationMode);
+			RenderOptions.SetEdgeMode(ProcessedImage, edgeMode);
+
+			OriginalImage.InvalidateVisual();
+			ProcessedImage.InvalidateVisual();
+
+			StatusText.Text = "Toggled Filtering";
+		}
+
 		/// <summary>
 		/// Dispatches the selected image processing operation on a background task
 		/// to keep the UI responsive during heavy computations.
@@ -223,14 +244,14 @@ namespace ImageApp
 						{
 							// Prewitt kernels for edge detection.
 							sbyte[,] horizontalKernel = { 
-								{ -1, 0, 1 },
-								{ -1, 0, 1 },
-								{ -1, 0, 1 }	
-							}; 
-							sbyte[,] verticalKernel = {
 								{ -1, -1, -1 },
 								{ 0, 0, 0 },
 								{ 1, 1, 1 },
+							}; 
+							sbyte[,] verticalKernel = {
+								{ -1, 0, 1 },
+								{ -1, 0, 1 },
+								{ -1, 0, 1 }	
 							}; 
 							gray = EdgeMagnitude(gray, horizontalKernel, verticalKernel);
 							break;
@@ -241,42 +262,71 @@ namespace ImageApp
 
 						case ProcessingFunctions.BinaryErodeImage:
 						{
-							bool[,] structElem = null; // Define this structuring element yourself
+							bool x = true;
+							bool _ = false;
+							bool[,] structElem = {
+								{ _, x, _, },
+								{ x, _, x, },
+								{ _, x, _, },
+							};
 							gray = BinaryErodeImage(gray, structElem);
 							break;
 						}
 
 						case ProcessingFunctions.BinaryDilateImage:
 						{
-							bool[,] structElem = null; // Define this structuring element yourself
+							// Dilate expanding.
+							bool x = true;
+							bool _ = false;
+							bool[,] structElem = {
+								{ _, x, _, },
+								{ x, _, x, },
+								{ _, x, _, },
+							};
 							gray = BinaryDilateImage(gray, structElem);
 							break;
 						}
 
 						case ProcessingFunctions.BinaryOpenImage:
 						{
-							bool[,] structElem = null; // Define this structuring element yourself
+							bool x = true;
+							bool _ = false;
+							bool[,] structElem = {
+								{ _, _, x, _, _ },
+								{ _, x, x, x, _ },
+								{ x, x, x, x, x },
+								{ _, x, x, x, _ },
+								{ _, _, x, _, _ },
+							};
 							gray = BinaryOpenImage(gray, structElem);
 							break;
 						}
 
 						case ProcessingFunctions.BinaryCloseImage:
 						{
-							bool[,] structElem = null; // Define this structuring element yourself
+							bool x = true;
+							bool _ = false;
+							bool[,] structElem = {
+								{ _, _, x, _, _ },
+								{ _, x, x, x, _ },
+								{ x, x, x, x, x },
+								{ _, x, x, x, _ },
+								{ _, _, x, _, _ },
+							};
 							gray = BinaryCloseImage(gray, structElem);
 							break;
 						}
 
 						case ProcessingFunctions.GrayscaleErodeImage:
 						{
-							int[,] grayStructElem = null; // Define this structuring element yourself
+							int[,] grayStructElem = CreateRadialStructureElement(10);
 							gray = GrayscaleErodeImage(gray, grayStructElem);
 							break;
 						}
 
 						case ProcessingFunctions.GrayscaleDilateImage:
 						{
-							int[,] grayStructElem = null; // Define this structuring element yourself
+							int[,] grayStructElem = CreateRadialStructureElement(10);
 							gray = GrayscaleDilateImage(gray, grayStructElem);
 							break;
 						}
@@ -610,8 +660,66 @@ namespace ImageApp
 		/// <returns>The eroded binary image.</returns>
 		private byte[,] BinaryErodeImage(byte[,] inputImage, bool[,] structElem)
 		{
-			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement binary erosion
+			/* Alternative Implementation using BinaryDilate.
+
+			byte[,] output = InvertImage(inputImage);
+			bool[,] mirroredElem = new bool[structElem.GetLength(0), structElem.GetLength(1) ];
+
+			// Mirror the structure element.
+			int w = structElem.GetLength(0);
+			int h = structElem.GetLength(1);
+			for (int i = 0; i < w; i++)
+			for (int j = 0; j < h; j++)
+			{
+				mirroredElem[i, j] = structElem[w - 1 - i, h - 1 - j];
+			}
+
+			// Apply rule that Erosion with H = Inverted Dilation with H*.
+			return InvertImage(BinaryDilateImage(output, mirroredElem));
+
+			*/
+			
+			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1) ];
+			for (int x = 0; x < inputImage.GetLength(0); x++)
+			for (int y = 0; y < inputImage.GetLength(1); y++)
+			{
+				// Initialize to white.
+				output[x, y] = 255;
+			}
+
+			// Center of the structuring element.
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+			int center = (structElem.GetLength(0)-1) / 2;
+
+			for (int x = 0; x < inputImage.GetLength(0); x++)
+			for (int y = 0; y < inputImage.GetLength(1); y++)
+			{
+				// Apply the binary erosion by checking the surrounding structure.
+				for (int i = 0; i < structElem.GetLength(0); i++)
+				for (int j = 0; j < structElem.GetLength(1); j++)
+				{
+					int sx = x + i - center;
+					int sy = y + j - center;
+
+					// Skip if this is not part of the structure element.
+					if (!structElem[i,j] )
+					{
+						continue;
+					}
+
+					// This pixel is invalid if structure is out of bounds, 
+					// or pixel value is not foreground.
+					if (sx < 0 || sx >= w || sy < 0 || sy >= h || inputImage[sx, sy] == 255)
+					{
+						goto invalidPixel;
+					}
+				}
+				output[x, y] = 255;
+
+				invalidPixel:
+					;
+			}
 			return output;
 		}
 
@@ -624,7 +732,36 @@ namespace ImageApp
 		private byte[,] BinaryDilateImage(byte[,] inputImage, bool[,] structElem)
 		{
 			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement binary dilation
+
+			// Center of the structuring element.
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+			int center = (structElem.GetLength(0)-1) / 2;
+
+			for (int x = 0; x < inputImage.GetLength(0); x++)
+			for (int y = 0; y < inputImage.GetLength(1); y++)
+			{
+				// Skip if this pixel is not part of the binary image.
+				// WHITE = background.
+				if (inputImage[x, y] == 255)
+				{
+					continue;
+				}
+
+				// Apply the binary dilation.
+				for (int i = 0; i < structElem.GetLength(0); i++)
+				for (int j = 0; j < structElem.GetLength(1); j++)
+				{
+					// Skip if this is not part of the structure element, or is out of bounds.
+					int sx = x + i - center;
+					int sy = y + j - center;
+					if (!structElem[i,j] || sx < 0 || sx >= w || sy < 0 || sy >= h)
+					{
+						continue;
+					}
+					output[sx, sy] = 255;
+				}
+			}
 			return output;
 		}
 
@@ -636,9 +773,7 @@ namespace ImageApp
 		/// <returns>The opened binary image.</returns>
 		private byte[,] BinaryOpenImage(byte[,] inputImage, bool[,] structElem)
 		{
-			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement binary opening
-			return output;
+			return BinaryDilateImage(BinaryErodeImage(inputImage, structElem), structElem);
 		}
 
 		/// <summary>
@@ -649,9 +784,7 @@ namespace ImageApp
 		/// <returns>The closed binary image.</returns>
 		private byte[,] BinaryCloseImage(byte[,] inputImage, bool[,] structElem)
 		{
-			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement binary closing
-			return output;
+			return BinaryErodeImage(BinaryDilateImage(inputImage, structElem), structElem);
 		}
 
 		/// <summary>
@@ -663,7 +796,32 @@ namespace ImageApp
 		private byte[,] GrayscaleErodeImage(byte[,] inputImage, int[,] structElem)
 		{
 			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement grayscale erosion
+
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+			int center = (structElem.GetLength(0)-1) / 2;
+
+			for (int x = 0; x < inputImage.GetLength(0); x++)
+			for (int y = 0; y < inputImage.GetLength(1); y++)
+			{
+				// Apply the grayscale erosion by taking the min of the differences.
+				int lowest = 255;
+
+				for (int i = 0; i < structElem.GetLength(0); i++)
+				for (int j = 0; j < structElem.GetLength(1); j++)
+				{
+					int sx = x + i - center;
+					int sy = y + j - center;
+
+					// Skip values outside of the image.
+					if (sx < 0 || sx >= w || sy < 0 || sy >= h || structElem[i, j] == int.MaxValue)
+					{
+						continue;
+					}
+					lowest = Math.Min(lowest, inputImage[sx, sy] - structElem[i, j]);
+				}
+				output[x, y] = (byte)Math.Max(lowest, 0);
+			}
 			return output;
 		}
 
@@ -676,7 +834,32 @@ namespace ImageApp
 		private byte[,] GrayscaleDilateImage(byte[,] inputImage, int[,] structElem)
 		{
 			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
-			// TODO: implement grayscale dilation
+			
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+			int center = (structElem.GetLength(0)-1) / 2;
+
+			for (int x = 0; x < inputImage.GetLength(0); x++)
+			for (int y = 0; y < inputImage.GetLength(1); y++)
+			{
+				// Apply the grayscale erosion by taking the min of the differences.
+				int highest = 0;
+ 
+				for (int i = 0; i < structElem.GetLength(0); i++)
+				for (int j = 0; j < structElem.GetLength(1); j++)
+				{
+					int sx = x + i - center;
+					int sy = y + j - center;
+
+					// Skip values outside of the image.
+					if (sx < 0 || sx >= w || sy < 0 || sy >= h || structElem[i,j]==int.MaxValue)
+					{
+						continue;
+					}
+					highest = Math.Max(highest, inputImage[sx, sy] + structElem[i, j]);
+				}
+				output[x, y] = (byte)Math.Min(highest, 255);
+			}
 			return output;
 		}
 
@@ -734,6 +917,18 @@ namespace ImageApp
 					bins[grayImage[x, y]] += 1;
 				}
 			return bins;
+		}
+
+		private int[,] CreateRadialStructureElement(int radius)
+		{
+			int[,] output = new int[2*radius+1, 2*radius+1];
+			for (int i = -radius; i <= radius; i++)
+			for (int j = -radius; j <= radius; j++)
+			{
+				bool inside = i*i + j*j < radius*radius;
+				output[radius + i, radius + j] = inside ? 0: int.MaxValue; 
+			}
+			return output;
 		}
 	}
 }
