@@ -6,11 +6,23 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Data;
 
 namespace ImageApp
 {
 	public partial class MainWindow : Window
 	{
+		readonly sbyte[,] horizontalSobelKernel3x3 = { 
+			{ -1, -2, -1 },
+			{ 0, 0, 0 },
+			{ 1, 2, 1 },
+		}; 
+		readonly sbyte[,] verticalSobelKernel3x3 = {
+			{ -1, 0, 1 },
+			{ -2, 0, 2 },
+			{ -1, 0, 1 }	
+		}; 
+
 		private WriteableBitmap? _loadedBitmap; // the raw loaded image, kept in color, for display in OriginalImage
 		private byte[,,]? _loadedColorPixels; // [x, y, channel] with channel 0=R, 1=G, 2=B -- extracted once at load time
 		private byte[,]? _processedGray; // Processed grayscale values (nullable)
@@ -42,6 +54,9 @@ namespace ImageApp
 			BinaryCloseImage,
 			GrayscaleErodeImage,
 			GrayscaleDilateImage,
+			Task1,
+			Task2,
+			Task3,
 		}
 
 		public MainWindow()
@@ -212,6 +227,13 @@ namespace ImageApp
 
 			try
 			{
+				// Collect parameters from GUI.
+				byte kernelSize = (byte)(KernelSize.Value ?? 4);
+				byte threshold = (byte)(Threshold.Value ?? 128);
+				float sigma = (float)(GaussianSigma.Value ?? 5.0m);
+				bool bUseGaussian = SmoothingMethodSelector.SelectedIndex == 0;
+				byte structureElementSize = (byte)(StructureSize.Value ?? 3);
+
 				// Run computation and bitmap generation on a background task
 				// to keep the UI dispatcher thread responsive during heavy operations.
 				var (resultGray, resultBmp) = await Task.Run(() =>
@@ -223,6 +245,39 @@ namespace ImageApp
 
 						switch (selected)
 						{
+						case ProcessingFunctions.Task3:
+						{
+							// Apply binary closing.
+							gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+							break;
+						}
+						case ProcessingFunctions.Task2:
+						{
+							// Apply grayscale erosion.
+							gray = GrayscaleErodeImage(gray, CreateSquareStructureElement(structureElementSize));
+							break;
+						}
+						case ProcessingFunctions.Task1:
+						{
+							// Step 1. Either Gaussian or Median Filter.
+							if (bUseGaussian)
+							{
+								float[,] gaussianFilter = CreateGaussianFilter(kernelSize, sigma);
+								gray = ConvolveImage(gray, gaussianFilter);
+							}
+							else
+							{
+								gray = MedianFilter(gray, kernelSize);
+							}
+
+							// Step 2. Apply Edge Detection.
+							gray = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+							
+							// Step 3. Apply Thresholding.
+							gray = ThresholdImage(gray, threshold);
+							break;
+						}
+
 						case ProcessingFunctions.ConvertToGrayscale:
 						// Already fully working; gray already holds the grayscale
 						// conversion result at this point (computed above, before this switch),
@@ -235,25 +290,14 @@ namespace ImageApp
 						gray = AdjustContrast(gray);
 						break;
 						case ProcessingFunctions.ConvolveImage:
-						gray = ConvolveImage(gray, CreateGaussianFilter(13, 1.0f));
+						gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
 						break;
 						case ProcessingFunctions.MedianFilter:
-						gray = MedianFilter(gray, 5);
+						gray = MedianFilter(gray, kernelSize);
 						break;
 						case ProcessingFunctions.EdgeMagnitude:
 						{
-							// Prewitt kernels for edge detection.
-							sbyte[,] horizontalKernel = { 
-								{ -1, -1, -1 },
-								{ 0, 0, 0 },
-								{ 1, 1, 1 },
-							}; 
-							sbyte[,] verticalKernel = {
-								{ -1, 0, 1 },
-								{ -1, 0, 1 },
-								{ -1, 0, 1 }	
-							}; 
-							gray = EdgeMagnitude(gray, horizontalKernel, verticalKernel);
+							gray = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 							break;
 						}
 						case ProcessingFunctions.ThresholdImage:
@@ -262,58 +306,26 @@ namespace ImageApp
 
 						case ProcessingFunctions.BinaryErodeImage:
 						{
-							bool x = true;
-							bool _ = false;
-							bool[,] structElem = {
-								{ _, x, _, },
-								{ x, _, x, },
-								{ _, x, _, },
-							};
-							gray = BinaryErodeImage(gray, structElem);
+							gray = BinaryErodeImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
 							break;
 						}
 
 						case ProcessingFunctions.BinaryDilateImage:
 						{
 							// Dilate expanding.
-							bool x = true;
-							bool _ = false;
-							bool[,] structElem = {
-								{ _, x, _, },
-								{ x, _, x, },
-								{ _, x, _, },
-							};
-							gray = BinaryDilateImage(gray, structElem);
+							gray = BinaryDilateImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
 							break;
 						}
 
 						case ProcessingFunctions.BinaryOpenImage:
 						{
-							bool x = true;
-							bool _ = false;
-							bool[,] structElem = {
-								{ _, _, x, _, _ },
-								{ _, x, x, x, _ },
-								{ x, x, x, x, x },
-								{ _, x, x, x, _ },
-								{ _, _, x, _, _ },
-							};
-							gray = BinaryOpenImage(gray, structElem);
+							gray = BinaryOpenImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
 							break;
 						}
 
 						case ProcessingFunctions.BinaryCloseImage:
 						{
-							bool x = true;
-							bool _ = false;
-							bool[,] structElem = {
-								{ _, _, x, _, _ },
-								{ _, x, x, x, _ },
-								{ x, x, x, x, x },
-								{ _, x, x, x, _ },
-								{ _, _, x, _, _ },
-							};
-							gray = BinaryCloseImage(gray, structElem);
+							gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
 							break;
 						}
 
@@ -342,7 +354,29 @@ namespace ImageApp
 				_processedGray = resultGray;
 				(ProcessedImage.Source as IDisposable)?.Dispose();
 				ProcessedImage.Source = resultBmp;
-				StatusText.Text = $"Completed {selected}.";
+
+				// Compute number of different values and average.
+				float averageIntensity = 0;
+				int numDistinctIntensities = 0;
+				int numForegroundPixels = 0;
+
+				bool[] seenIntensities = new bool[256];
+				foreach (byte b in resultGray)
+				{
+					if (b == 255)
+					{
+						numForegroundPixels++;
+					}
+					if (!seenIntensities[b])
+					{
+						seenIntensities[b] = true;
+						numDistinctIntensities++;
+					}
+					averageIntensity += b;
+				}
+				averageIntensity /= resultGray.Length;
+
+				StatusText.Text = $"Completed {selected}. Kernel={kernelSize}, Sigma={sigma}, Threshold={threshold}. Unique={numDistinctIntensities}, Average={averageIntensity} over {resultGray.Length} pixels, Foreground={numForegroundPixels}";
 			}
 			catch (Exception ex)
 			{
@@ -475,10 +509,12 @@ namespace ImageApp
 
 			// Normalize to 1.
 			for (int i = 0; i < size; i++)
+			{
 				for (int j = 0; j < size; j++)
 				{
 					filter[i, j] /= sum;
 				}
+			}
 
 			return filter;
 		}
@@ -580,6 +616,7 @@ namespace ImageApp
 		{
 			// create temporary grayscale image
 			byte[,] tempImage = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
+			float[,] edgeMagnitudeRaw = new float[inputImage.GetLength(0), inputImage.GetLength(1)];
 
 			int w = inputImage.GetLength(0);
 			int h = inputImage.GetLength(1);
@@ -590,6 +627,8 @@ namespace ImageApp
 
 			int vCenterX = (verticalKernel.GetLength(0)-1) / 2;
 			int vCenterY = (verticalKernel.GetLength(1)-1) / 2;
+			
+			float highestMagnitude = 0;
 
 			for (int x = 0; x < w; x++)
 			for (int y = 0; y < h; y++)
@@ -597,7 +636,7 @@ namespace ImageApp
 				// Compute the two derivatives.
 				// Keep track of the sums of the kernels.
 				float dx = 0;
-				int hSum = 0;
+				float dy = 0;
 
 				for (int i = 0; i < horizontalKernel.GetLength(0); i++)
 				for (int j = 0; j < horizontalKernel.GetLength(1); j++)
@@ -606,13 +645,8 @@ namespace ImageApp
 					int sy = MirrorRepeat(y + j - hCenterY, h);
 					
 					int val = horizontalKernel[i, j];
-					hSum += Math.Abs(val);
 					dx += inputImage[sx, sy] * val;
 				}
-				dx /= hSum;
-
-				float dy = 0;
-				int vSum = 0;
 
 				for (int i = 0; i < verticalKernel.GetLength(0); i++)
 				for (int j = 0; j < verticalKernel.GetLength(1); j++)
@@ -621,13 +655,19 @@ namespace ImageApp
 					int sy = MirrorRepeat(y + j - vCenterY, h);
 					
 					int val = verticalKernel[i, j];
-					vSum += Math.Abs(val);
 					dy += inputImage[sx, sy] * val;
 				}
-				dy /= vSum;
 
 				float intensity = MathF.Sqrt(dx * dx + dy * dy);
-				tempImage[x, y] = (byte)Math.Min(intensity, 255);
+				edgeMagnitudeRaw[x, y] = intensity;
+				highestMagnitude = Math.Max(highestMagnitude, intensity);
+			}
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				tempImage[x, y] = (byte)(edgeMagnitudeRaw[x, y] / highestMagnitude * 255.0f);
+				//tempImage[x, y] = (byte)Math.Min(edgeMagnitudeRaw[x, y], 255);
 			}
 
 			return tempImage;
@@ -660,8 +700,6 @@ namespace ImageApp
 		/// <returns>The eroded binary image.</returns>
 		private byte[,] BinaryErodeImage(byte[,] inputImage, bool[,] structElem)
 		{
-			/* Alternative Implementation using BinaryDilate.
-
 			byte[,] output = InvertImage(inputImage);
 			bool[,] mirroredElem = new bool[structElem.GetLength(0), structElem.GetLength(1) ];
 
@@ -676,51 +714,6 @@ namespace ImageApp
 
 			// Apply rule that Erosion with H = Inverted Dilation with H*.
 			return InvertImage(BinaryDilateImage(output, mirroredElem));
-
-			*/
-			
-			byte[,] output = new byte[inputImage.GetLength(0), inputImage.GetLength(1) ];
-			for (int x = 0; x < inputImage.GetLength(0); x++)
-			for (int y = 0; y < inputImage.GetLength(1); y++)
-			{
-				// Initialize to white.
-				output[x, y] = 255;
-			}
-
-			// Center of the structuring element.
-			int w = inputImage.GetLength(0);
-			int h = inputImage.GetLength(1);
-			int center = (structElem.GetLength(0)-1) / 2;
-
-			for (int x = 0; x < inputImage.GetLength(0); x++)
-			for (int y = 0; y < inputImage.GetLength(1); y++)
-			{
-				// Apply the binary erosion by checking the surrounding structure.
-				for (int i = 0; i < structElem.GetLength(0); i++)
-				for (int j = 0; j < structElem.GetLength(1); j++)
-				{
-					int sx = x + i - center;
-					int sy = y + j - center;
-
-					// Skip if this is not part of the structure element.
-					if (!structElem[i,j] )
-					{
-						continue;
-					}
-
-					// This pixel is invalid if structure is out of bounds, 
-					// or pixel value is not foreground.
-					if (sx < 0 || sx >= w || sy < 0 || sy >= h || inputImage[sx, sy] == 255)
-					{
-						goto invalidPixel;
-					}
-				}
-				output[x, y] = 255;
-
-				invalidPixel:
-					;
-			}
-			return output;
 		}
 
 		/// <summary>
@@ -742,8 +735,8 @@ namespace ImageApp
 			for (int y = 0; y < inputImage.GetLength(1); y++)
 			{
 				// Skip if this pixel is not part of the binary image.
-				// WHITE = background.
-				if (inputImage[x, y] == 255)
+				// BLACK = background.
+				if (inputImage[x, y] == 0)
 				{
 					continue;
 				}
@@ -927,6 +920,28 @@ namespace ImageApp
 			{
 				bool inside = i*i + j*j < radius*radius;
 				output[radius + i, radius + j] = inside ? 0: int.MaxValue; 
+			}
+			return output;
+		}
+
+		private int[,] CreateSquareStructureElement(int size)
+		{
+			int[,] output = new int[size, size];
+			for (int i = 0; i < size; i++)
+			for (int j = 0; j < size; j++)
+			{
+				output[i, j] = 0;
+			}
+			return output;
+		}
+
+		private bool[,] CreateSquareBinaryStructureElement(int size)
+		{
+			bool[,] output = new bool[size, size];
+			for (int i = 0; i < size; i++)
+			for (int j = 0; j < size; j++)
+			{
+				output[i, j] = true;
 			}
 			return output;
 		}
