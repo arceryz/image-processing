@@ -44,6 +44,7 @@
 			<Button x:Name="TogglePixelArtButton" Content="Toggle Filtering" Width="150" Click="OnToggledPixelArt"/>
 		</StackPanel>
 
+		<StackPanel Grid.Row="2" Orientation="Vertical" Spacing="10" Margin="0,0,0,4">
 		<StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,0,0,4">
 			<TextBlock Text="Smoothing Method"/>
 			<ComboBox x:Name="SmoothingMethodSelector" SelectedIndex="0" MaxDropDownHeight="100">
@@ -58,6 +59,14 @@
 			<NumericUpDown x:Name="Threshold" Minimum="0" Maximum="255" Increment="1" Value="128" ShowButtonSpinner="False"/>
 			<TextBlock Text="Structuring Element Size"/>
 			<NumericUpDown x:Name="StructureSize" Minimum="0" Maximum="100" Increment="1" Value="3" ShowButtonSpinner="False" />
+		</StackPanel>
+
+		<StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,0,0,4">
+			<TextBlock Text="Hysteresis% Low"/>
+			<NumericUpDown x:Name="HysteresisLow" Minimum="0" Maximum="1" Increment="1" Value="0.05" ShowButtonSpinner="False" />
+			<TextBlock Text="Hysteresis% High"/>
+			<NumericUpDown x:Name="HysteresisHigh" Minimum="0" Maximum="1" Increment="1" Value="0.2" ShowButtonSpinner="False" />
+		</StackPanel>
 		</StackPanel>
 
 		<TextBlock Grid.Row="3" x:Name="StatusText" Text="" TextWrapping="Wrap" Margin="0,4,0,0"/>

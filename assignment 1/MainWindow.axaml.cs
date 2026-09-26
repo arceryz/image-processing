@@ -57,6 +57,7 @@ namespace ImageApp
 			Task1,
 			Task2,
 			Task3,
+			Extra1CannyEdgeDetection
 		}
 
 		public MainWindow()
@@ -233,6 +234,8 @@ namespace ImageApp
 				float sigma = (float)(GaussianSigma.Value ?? 5.0m);
 				bool bUseGaussian = SmoothingMethodSelector.SelectedIndex == 0;
 				byte structureElementSize = (byte)(StructureSize.Value ?? 3);
+				float hysterLow = (float)(HysteresisLow.Value ?? 0.05m);
+				float hysterHigh = (float)(HysteresisHigh.Value ?? 0.2m);
 
 				// Run computation and bitmap generation on a background task
 				// to keep the UI dispatcher thread responsive during heavy operations.
@@ -242,9 +245,67 @@ namespace ImageApp
 						// operation always starts from the original loaded image, never chained
 						// from a previous Apply's result.
 						byte[,] gray = ConvertToGrayscale(colorPixels);
+						
+						WriteableBitmap customBitmap = null;
 
 						switch (selected)
 						{
+						case ProcessingFunctions.Extra1CannyEdgeDetection:
+						{
+
+							(int[,] classes, int numClasses) = CannyEdgeDetection(gray, sigma, hysterLow, hysterHigh);
+
+							// Assign random hues to each of the color classes.
+							List<float> hues = new();
+							for (int i = 0; i < numClasses; i++)
+							{
+								hues.Add((float)i / numClasses);
+							}
+
+							float[] assignedHues = new float[numClasses];
+							Random rand = new();
+							for (int i = 0; i < numClasses; i++)
+							{
+								int sel = rand.Next(hues.Count);
+								assignedHues[i] = hues[sel];
+								hues.RemoveAt(sel);
+							}
+
+							int w = gray.GetLength(0);
+							int h = gray.GetLength(1);
+							customBitmap = new WriteableBitmap(
+									new PixelSize(w, h),
+									new Vector(96, 96),
+									PixelFormat.Rgba8888);
+
+							// Create the image data.
+							byte[] imageBytes = new byte[w*h*4];
+							for (int x = 0; x < w; x++)
+							for (int y = 0; y < h; y++)
+							{
+								int colorClass = classes[x, y];
+								var col = new Color(255, 0, 0, 0);
+
+								if (colorClass > 0)
+								{
+									float hue = assignedHues[colorClass-1];
+									var hsv = new HsvColor(1.0, hue*360, 1.0, 1.0);
+									col = hsv.ToRgb();
+								}
+
+								int baseIndex = 4 * (x + y * w);
+								imageBytes[baseIndex] = col.R;
+								imageBytes[baseIndex+1] = col.G;
+								imageBytes[baseIndex+2] = col.B;
+								imageBytes[baseIndex+3] = 255;
+							}
+
+							using (var fb = customBitmap.Lock()) 
+							{
+								Marshal.Copy(imageBytes, 0, fb.Address, imageBytes.Length);
+							}
+							break;
+						}
 						case ProcessingFunctions.Task3:
 						{
 							// Apply binary closing.
@@ -271,7 +332,7 @@ namespace ImageApp
 							}
 
 							// Step 2. Apply Edge Detection.
-							gray = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+							(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 							
 							// Step 3. Apply Thresholding.
 							gray = ThresholdImage(gray, threshold);
@@ -297,7 +358,7 @@ namespace ImageApp
 						break;
 						case ProcessingFunctions.EdgeMagnitude:
 						{
-							gray = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+							(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 							break;
 						}
 						case ProcessingFunctions.ThresholdImage:
@@ -347,7 +408,7 @@ namespace ImageApp
 						throw new NotSupportedException($"Operation '{selected}' is not implemented in the OnApply switch.");
 						}
 
-						var bmp = ByteArrayToBitmap(gray);
+						var bmp = customBitmap == null ? ByteArrayToBitmap(gray): customBitmap;
 						return (gray, bmp);
 						});
 
@@ -540,8 +601,10 @@ namespace ImageApp
 			int w = inputImage.GetLength(0);
 			int h = inputImage.GetLength(1);
 
-			int filterSize = filter.GetLength(0);
-			int filterCenter = (filterSize-1) / 2;
+			int filterSizeX = filter.GetLength(0);
+			int filterSizeY = filter.GetLength(1);
+			int filterCenterX = (filterSizeX-1) / 2;
+			int filterCenterY = (filterSizeY-1) / 2;
 
 			// Iterate the image in (x,y), and apply a mirroring-filter to it.
 			for (int x = 0; x < w; x++)
@@ -550,11 +613,11 @@ namespace ImageApp
 				// Sum all the values in the filter for this pixel.
 				float sum = 0;
 
-				for (int i = 0; i < filterSize; i++)
-				for (int j = 0; j < filterSize; j++)
+				for (int i = 0; i < filterSizeX; i++)
+				for (int j = 0; j < filterSizeY; j++)
 				{
-					int sx = MirrorRepeat(x + i - filterCenter, w);
-					int sy = MirrorRepeat(y + j - filterCenter, h);
+					int sx = MirrorRepeat(x + i - filterCenterX, w);
+					int sy = MirrorRepeat(y + j - filterCenterY, h);
 
 					sum += inputImage[sx, sy] * filter[i, j];
 				}
@@ -608,7 +671,7 @@ namespace ImageApp
 		/// <param name="horizontalKernel">Horizontal gradient kernel.</param>
 		/// <param name="verticalKernel">Vertical gradient kernel.</param>
 		/// <returns>The edge gradient magnitude image.</returns>
-		private byte[,] EdgeMagnitude(
+		private (byte[,], float[,], float[,], float[,]) EdgeMagnitude(
 				byte[,] inputImage,
 				sbyte[,] horizontalKernel,
 				sbyte[,] verticalKernel
@@ -617,6 +680,8 @@ namespace ImageApp
 			// create temporary grayscale image
 			byte[,] tempImage = new byte[inputImage.GetLength(0), inputImage.GetLength(1)];
 			float[,] edgeMagnitudeRaw = new float[inputImage.GetLength(0), inputImage.GetLength(1)];
+			float[,] dxMap = new float[inputImage.GetLength(0), inputImage.GetLength(1)];
+			float[,] dyMap = new float[inputImage.GetLength(0), inputImage.GetLength(1)];
 
 			int w = inputImage.GetLength(0);
 			int h = inputImage.GetLength(1);
@@ -660,6 +725,8 @@ namespace ImageApp
 
 				float intensity = MathF.Sqrt(dx * dx + dy * dy);
 				edgeMagnitudeRaw[x, y] = intensity;
+				dxMap[x, y] = dx;
+				dyMap[x, y] = dy;
 				highestMagnitude = Math.Max(highestMagnitude, intensity);
 			}
 
@@ -667,10 +734,11 @@ namespace ImageApp
 			for (int y = 0; y < h; y++)
 			{
 				tempImage[x, y] = (byte)(edgeMagnitudeRaw[x, y] / highestMagnitude * 255.0f);
+				edgeMagnitudeRaw[x, y] /= highestMagnitude;
 				//tempImage[x, y] = (byte)Math.Min(edgeMagnitudeRaw[x, y], 255);
 			}
 
-			return tempImage;
+			return (tempImage, edgeMagnitudeRaw, dxMap, dyMap);
 		}
 
 		/// <summary> ThresholdImage
@@ -944,6 +1012,161 @@ namespace ImageApp
 				output[i, j] = true;
 			}
 			return output;
+		}
+
+		// EXTRA 1: CANNY EDGE DETECTION.
+		private (int[,], int) CannyEdgeDetection(byte[,] image, float sigma, float lo, float hi)
+		{
+			int w = image.GetLength(0);
+			int h = image.GetLength(1);
+
+			byte[,] smoothImage = ConvolveImage(image, CreateGaussianFilter((byte)(5*sigma + 1), sigma));
+			(_, float[,] edgeMagnitudes, float[,] dxMap, float[,] dyMap) = EdgeMagnitude(smoothImage, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+
+			float[,] localMaxima = new float[w, h];
+			bool[,] edgePixels = new bool[w, h];
+
+			// Step 2. Compute local maxima.
+			for (int x = 1; x < w-1; x++)
+			for (int y = 1; y < h-1; y++)
+			{
+				if (IsLocalMaxima(x, y, edgeMagnitudes, dxMap, dyMap, lo))
+				{
+					localMaxima[x, y] = edgeMagnitudes[x, y];
+				}
+			}
+
+			// Step 3. Trace and threshold.
+			// All color classes 1 and above are edges.
+			int[,] colorClasses = new int[w, h];
+			int currentColorClass = 1;
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				// If this is a local maxima above the hysteresis threshold,
+				// perform a flood-fill to try and extract the edge.
+				if (localMaxima[x, y] > hi && !edgePixels[x, y])
+				{
+					TraceAndThreshold(x, y, localMaxima, edgePixels, lo, colorClasses, currentColorClass);
+					currentColorClass++;
+				}
+			}
+
+			return (colorClasses, currentColorClass-1);
+		}
+
+		// Returns an integer 0,1,2,4 for the sector (clockwise from right) that this dx,dy lies in.
+		// Uses technique of the Advanced Algorithms book by rotating by PI/8
+		int GetCompassSector(float dx, float dy)
+		{
+			// Rotate by PI/8.
+			float cos8 = MathF.Cos(MathF.PI / 8);
+			float sin8 = MathF.Sin(MathF.PI / 8);
+			float _dx = cos8 * dx - sin8 * dy;
+			float _dy = sin8 * dx + cos8 * dy;
+
+			// Mirror to positive octants.
+			if (_dy < 0)
+			{
+				_dx *= -1;
+				_dy *= -1;
+			}
+			return _dx > 0 ? (_dx > _dy ? 0: 1): 
+				(-_dx < _dy ? 2: 3);
+		}
+
+		bool IsLocalMaxima(int u, int v, float[,] magnitudes, float[,] dx, float[,] dy, float lo)
+		{
+			float mag = magnitudes[u, v];
+
+			// Can never be a local maximum of below the threshold.
+			if (mag < lo)
+			{
+				return false;
+			}
+
+			int sector = GetCompassSector(dx[u, v], dy[u, v]);
+			float magL = 0;
+			float magR = 0;
+
+			switch(sector)
+			{
+				case 0: // Horizontal case.
+				{
+					magL = magnitudes[u-1,v];
+					magR = magnitudes[u+1,v];
+					break;
+				}
+				case 1: // Diagonal-right case.
+				{
+					magL = magnitudes[u-1,v-1];
+					magR = magnitudes[u+1,v+1];
+					break;
+				}
+				case 2: // Vertical case.
+				{
+					magL = magnitudes[u,v-1];
+					magR = magnitudes[u,v+1];
+					break;
+				}
+				case 3: // Diagonal-left case.
+				{
+					magL = magnitudes[u-1,v+1];
+					magR = magnitudes[u+1,v-1];
+					break;
+				}
+			}
+
+			return magL < mag && magR < mag;
+		}
+
+		void TraceAndThreshold(int u, int v, float[,] localMaxima, bool[,] edgePixels, float lo, int[,] colorClasses, int currentColorClass)
+		{
+			// This pixel becomes part of an edge.
+			// Also assign color class.
+			edgePixels[u, v] = true;
+			colorClasses[u, v] = currentColorClass;
+	
+			int w = localMaxima.GetLength(0);
+			int h = localMaxima.GetLength(1);
+
+			int x1 = Math.Max(u-1, 0);
+			int x2 = Math.Min(u+1, w-1);
+
+			int y1 = Math.Max(v-1, 0);
+			int y2 = Math.Min(v+1, h-1);
+
+			// Now iterate the neighborhood.
+			for (int x = x1; x <= x2; x++)
+			for (int y = y1; y <= y2; y++)
+			{
+				// If this pixel is a local maxima with sufficient value,
+				// and it has not been seen yet -> Recurse into it.
+				if (localMaxima[x, y] >= lo && !edgePixels[x, y])
+				{
+					TraceAndThreshold(x, y, localMaxima, edgePixels, lo, colorClasses, currentColorClass);
+				}
+			}
+		}
+
+		float[,] GetNormalizedFilter(sbyte[,] filter)
+		{
+			float[,] arr = new float[filter.GetLength(0), filter.GetLength(1)];
+			float sum = 0.0f;
+			for (int x = 0; x < filter.GetLength(0); x++)
+			for (int y = 0; y < filter.GetLength(1); y++)
+			{
+				float f = filter[x, y];
+				sum += MathF.Abs(f);
+				arr[x, y] = f;
+			}
+			for (int x = 0; x < filter.GetLength(0); x++)
+			for (int y = 0; y < filter.GetLength(1); y++)
+			{
+				arr[x, y] /= sum;
+			}
+			return arr;
 		}
 	}
 }
