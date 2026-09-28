@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.9.24)  25 SEP 2026 18:31
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.9.24)  28 SEP 2026 20:58
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -604,20 +604,20 @@ File: l3backend-pdftex.def 2025-10-09 L3 backend support: PDF output (pdfTeX)
 ) (report1.aux)
 \openout1 = `report1.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 37.
-LaTeX Font Info:    ... okay on input line 37.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 48.
+LaTeX Font Info:    ... okay on input line 48.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -687,15 +687,15 @@ Package pgfplots notification 'compat/show suggested version=true': document ha
 s been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
 
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <12> on input line 38.
+(Font)              <12> on input line 49.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <8> on input line 38.
+(Font)              <8> on input line 49.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <6> on input line 38.
+(Font)              <6> on input line 49.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <7> on input line 45.
+(Font)              <7> on input line 56.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <5> on input line 45.
+(Font)              <5> on input line 56.
 [1
 
 {C:/Users/tjmva/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}]
@@ -734,114 +734,114 @@ LaTeX Font Info:    External font `cmex10' loaded for size
 <results/image_for_tasks1and2.png, id=14, 906.38625pt x 358.33875pt>
 File: results/image_for_tasks1and2.png Graphic file (type png)
 <use results/image_for_tasks1and2.png>
-Package pdftex.def Info: results/image_for_tasks1and2.png  used on input line 8
-1.
+Package pdftex.def Info: results/image_for_tasks1and2.png  used on input line 9
+2.
 (pdftex.def)             Requested size: 227.62204pt x 89.98907pt.
 File: results/task1/clean_gaussian3.png Graphic file (type png)
 <use results/task1/clean_gaussian3.png>
 Package pdftex.def Info: results/task1/clean_gaussian3.png  used on input line 
-115.
+126.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_median3.png Graphic file (type png)
 <use results/task1/clean_median3.png>
-Package pdftex.def Info: results/task1/clean_median3.png  used on input line 11
-5.
+Package pdftex.def Info: results/task1/clean_median3.png  used on input line 12
+6.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_gaussian7.png Graphic file (type png)
 <use results/task1/clean_gaussian7.png>
 Package pdftex.def Info: results/task1/clean_gaussian7.png  used on input line 
-115.
+126.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_median7.png Graphic file (type png)
 <use results/task1/clean_median7.png>
-Package pdftex.def Info: results/task1/clean_median7.png  used on input line 11
-5.
+Package pdftex.def Info: results/task1/clean_median7.png  used on input line 12
+6.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_gaussian11.png Graphic file (type png)
 <use results/task1/clean_gaussian11.png>
 Package pdftex.def Info: results/task1/clean_gaussian11.png  used on input line
- 115.
+ 126.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_median11.png Graphic file (type png)
 <use results/task1/clean_median11.png>
 Package pdftex.def Info: results/task1/clean_median11.png  used on input line 1
-15.
+26.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_gaussian15.png Graphic file (type png)
 <use results/task1/clean_gaussian15.png>
 Package pdftex.def Info: results/task1/clean_gaussian15.png  used on input line
- 115.
+ 126.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_median15.png Graphic file (type png)
 <use results/task1/clean_median15.png>
 Package pdftex.def Info: results/task1/clean_median15.png  used on input line 1
-15.
+26.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_gaussian19.png Graphic file (type png)
 <use results/task1/clean_gaussian19.png>
 Package pdftex.def Info: results/task1/clean_gaussian19.png  used on input line
- 115.
+ 126.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/clean_median19.png Graphic file (type png)
 <use results/task1/clean_median19.png>
 Package pdftex.def Info: results/task1/clean_median19.png  used on input line 1
-15.
+26.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 <results/image_for_task1_noisy.png, id=25, 906.38625pt x 358.33875pt>
 File: results/image_for_task1_noisy.png Graphic file (type png)
 <use results/image_for_task1_noisy.png>
 Package pdftex.def Info: results/image_for_task1_noisy.png  used on input line 
-123.
+134.
 (pdftex.def)             Requested size: 227.62204pt x 89.98907pt.
 File: results/task1/noisy_gaussian3.png Graphic file (type png)
 <use results/task1/noisy_gaussian3.png>
 Package pdftex.def Info: results/task1/noisy_gaussian3.png  used on input line 
-157.
+168.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_median3.png Graphic file (type png)
 <use results/task1/noisy_median3.png>
-Package pdftex.def Info: results/task1/noisy_median3.png  used on input line 15
-7.
+Package pdftex.def Info: results/task1/noisy_median3.png  used on input line 16
+8.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_gaussian7.png Graphic file (type png)
 <use results/task1/noisy_gaussian7.png>
 Package pdftex.def Info: results/task1/noisy_gaussian7.png  used on input line 
-157.
+168.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_median7.png Graphic file (type png)
 <use results/task1/noisy_median7.png>
-Package pdftex.def Info: results/task1/noisy_median7.png  used on input line 15
-7.
+Package pdftex.def Info: results/task1/noisy_median7.png  used on input line 16
+8.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_gaussian11.png Graphic file (type png)
 <use results/task1/noisy_gaussian11.png>
 Package pdftex.def Info: results/task1/noisy_gaussian11.png  used on input line
- 157.
+ 168.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_median11.png Graphic file (type png)
 <use results/task1/noisy_median11.png>
 Package pdftex.def Info: results/task1/noisy_median11.png  used on input line 1
-57.
+68.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_gaussian15.png Graphic file (type png)
 <use results/task1/noisy_gaussian15.png>
 Package pdftex.def Info: results/task1/noisy_gaussian15.png  used on input line
- 157.
+ 168.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_median15.png Graphic file (type png)
 <use results/task1/noisy_median15.png>
 Package pdftex.def Info: results/task1/noisy_median15.png  used on input line 1
-57.
+68.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_gaussian19.png Graphic file (type png)
 <use results/task1/noisy_gaussian19.png>
 Package pdftex.def Info: results/task1/noisy_gaussian19.png  used on input line
- 157.
+ 168.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task1/noisy_median19.png Graphic file (type png)
 <use results/task1/noisy_median19.png>
 Package pdftex.def Info: results/task1/noisy_median19.png  used on input line 1
-57.
+68.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
  [2
 
@@ -893,27 +893,27 @@ ask1/noisy_gaussian19.png> <./results/task1/noisy_median19.png>] [4
 File: results/image_for_tasks1and2.png Graphic file (type png)
 <use results/image_for_tasks1and2.png>
 Package pdftex.def Info: results/image_for_tasks1and2.png  used on input line 2
-74.
+85.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task2/erosion3.png Graphic file (type png)
 <use results/task2/erosion3.png>
-Package pdftex.def Info: results/task2/erosion3.png  used on input line 274.
+Package pdftex.def Info: results/task2/erosion3.png  used on input line 285.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task2/erosion7.png Graphic file (type png)
 <use results/task2/erosion7.png>
-Package pdftex.def Info: results/task2/erosion7.png  used on input line 274.
+Package pdftex.def Info: results/task2/erosion7.png  used on input line 285.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task2/erosion11.png Graphic file (type png)
 <use results/task2/erosion11.png>
-Package pdftex.def Info: results/task2/erosion11.png  used on input line 274.
+Package pdftex.def Info: results/task2/erosion11.png  used on input line 285.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task2/erosion15.png Graphic file (type png)
 <use results/task2/erosion15.png>
-Package pdftex.def Info: results/task2/erosion15.png  used on input line 274.
+Package pdftex.def Info: results/task2/erosion15.png  used on input line 285.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
 File: results/task2/erosion19.png Graphic file (type png)
 <use results/task2/erosion19.png>
-Package pdftex.def Info: results/task2/erosion19.png  used on input line 274.
+Package pdftex.def Info: results/task2/erosion19.png  used on input line 285.
 (pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
  [5
 
@@ -921,7 +921,7 @@ Package pdftex.def Info: results/task2/erosion19.png  used on input line 274.
 /erosion11.png> <./results/task2/erosion15.png> <./results/task2/erosion19.png>
 ]
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <9> on input line 328.
+(Font)              <9> on input line 339.
  [6
 
 ]
@@ -959,33 +959,115 @@ LaTeX Font Info:    External font `cmex10' loaded for size
 
 File: results/image_for_task3.png Graphic file (type png)
 <use results/image_for_task3.png>
-Package pdftex.def Info: results/image_for_task3.png  used on input line 368.
+Package pdftex.def Info: results/image_for_task3.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
 File: results/task3/closing3.png Graphic file (type png)
 <use results/task3/closing3.png>
-Package pdftex.def Info: results/task3/closing3.png  used on input line 368.
+Package pdftex.def Info: results/task3/closing3.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
 File: results/task3/closing7.png Graphic file (type png)
 <use results/task3/closing7.png>
-Package pdftex.def Info: results/task3/closing7.png  used on input line 368.
+Package pdftex.def Info: results/task3/closing7.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
 File: results/task3/closing11.png Graphic file (type png)
 <use results/task3/closing11.png>
-Package pdftex.def Info: results/task3/closing11.png  used on input line 368.
+Package pdftex.def Info: results/task3/closing11.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
 File: results/task3/closing15.png Graphic file (type png)
 <use results/task3/closing15.png>
-Package pdftex.def Info: results/task3/closing15.png  used on input line 368.
+Package pdftex.def Info: results/task3/closing15.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
 File: results/task3/closing19.png Graphic file (type png)
 <use results/task3/closing19.png>
-Package pdftex.def Info: results/task3/closing19.png  used on input line 368.
+Package pdftex.def Info: results/task3/closing19.png  used on input line 379.
 (pdftex.def)             Requested size: 110.61555pt x 85.35826pt.
  [7
 
  <./results/image_for_task3.png> <./results/task3/closing3.png> <./results/task
 3/closing7.png> <./results/task3/closing11.png> <./results/task3/closing15.png>
  <./results/task3/closing19.png>] [8
+
+]
+*geometry* verbose mode - [ newgeometry ] result:
+* driver: pdftex
+* paper: a4paper
+* layout: <same size as paper>
+* layoutoffset:(h,v)=(0.0pt,0.0pt)
+* modes: 
+* h-part:(L,W,R)=(22.76219pt, 551.98349pt, 22.76219pt)
+* v-part:(T,H,B)=(42.67912pt, 779.60553pt, 22.76219pt)
+* \paperwidth=597.50787pt
+* \paperheight=845.04684pt
+* \textwidth=551.98349pt
+* \textheight=779.60553pt
+* \oddsidemargin=-49.5078pt
+* \evensidemargin=-49.5078pt
+* \topmargin=-66.59087pt
+* \headheight=12.0pt
+* \headsep=25.0pt
+* \topskip=10.0pt
+* \footskip=30.0pt
+* \marginparwidth=57.0pt
+* \marginparsep=11.0pt
+* \columnsep=10.0pt
+* \skip\footins=9.0pt plus 4.0pt minus 2.0pt
+* \hoffset=0.0pt
+* \voffset=0.0pt
+* \mag=1000
+* \@twocolumnfalse
+* \@twosidefalse
+* \@mparswitchfalse
+* \@reversemarginfalse
+* (1in=72.27pt=25.4mm, 1cm=28.453pt)
+
+File: results/image_for_tasks1and2.png Graphic file (type png)
+<use results/image_for_tasks1and2.png>
+Package pdftex.def Info: results/image_for_tasks1and2.png  used on input line 4
+68.
+(pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
+File: results/extra1/tram_hyster03.png Graphic file (type png)
+<use results/extra1/tram_hyster03.png>
+Package pdftex.def Info: results/extra1/tram_hyster03.png  used on input line 4
+68.
+(pdftex.def)             Requested size: 215.90517pt x 85.35826pt.
+File: results/lena_median.png Graphic file (type png)
+<use results/lena_median.png>
+Package pdftex.def Info: results/lena_median.png  used on input line 468.
+(pdftex.def)             Requested size: 142.25801pt x 142.26378pt.
+File: results/extra1/lena.png Graphic file (type png)
+<use results/extra1/lena.png>
+Package pdftex.def Info: results/extra1/lena.png  used on input line 468.
+(pdftex.def)             Requested size: 142.25801pt x 142.26378pt.
+File: results/flower.png Graphic file (type png)
+<use results/flower.png>
+Package pdftex.def Info: results/flower.png  used on input line 468.
+(pdftex.def)             Requested size: 142.7234pt x 142.26378pt.
+File: results/extra1/flower.png Graphic file (type png)
+<use results/extra1/flower.png>
+Package pdftex.def Info: results/extra1/flower.png  used on input line 468.
+(pdftex.def)             Requested size: 142.7234pt x 142.26378pt.
+File: results/airplane.png Graphic file (type png)
+<use results/airplane.png>
+Package pdftex.def Info: results/airplane.png  used on input line 468.
+(pdftex.def)             Requested size: 151.74391pt x 113.81102pt.
+File: results/extra1/airplane.png Graphic file (type png)
+<use results/extra1/airplane.png>
+Package pdftex.def Info: results/extra1/airplane.png  used on input line 468.
+(pdftex.def)             Requested size: 151.74391pt x 113.81102pt.
+File: results/cables.png Graphic file (type png)
+<use results/cables.png>
+Package pdftex.def Info: results/cables.png  used on input line 468.
+(pdftex.def)             Requested size: 151.60248pt x 113.81102pt.
+File: results/extra1/cables.png Graphic file (type png)
+<use results/extra1/cables.png>
+Package pdftex.def Info: results/extra1/cables.png  used on input line 468.
+(pdftex.def)             Requested size: 151.59825pt x 113.81102pt.
+ [9
+
+ <./results/extra1/tram_hyster03.png> <./results/lena_median.png> <./results/ex
+tra1/lena.png> <./results/flower.png> <./results/extra1/flower.png> <./results/
+airplane.png> <./results/extra1/airplane.png> <./results/cables.png> <./results
+/extra1/cables.png>] [10
 
 ] (report1.aux)
  ***********
@@ -994,10 +1076,10 @@ L3 programming layer <2025-12-24>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 24743 strings out of 467871
- 654834 string characters out of 5418376
+ 24809 strings out of 467871
+ 656781 string characters out of 5418376
  1181701 words of memory out of 5000000
- 53269 multiletter control sequences out of 15000+600000
+ 53335 multiletter control sequences out of 15000+600000
  632580 words of font info for 56 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  99i,16n,118p,730b,2219s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -1013,9 +1095,9 @@ Data/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr7.pfb><C:/Users/tj
 mva/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr9.pfb><C:/U
 sers/tjmva/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.
 pfb>
-Output written on report1.pdf (8 pages, 1777931 bytes).
+Output written on report1.pdf (10 pages, 3312969 bytes).
 PDF statistics:
- 117 PDF objects out of 1000 (max. 8388607)
+ 140 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)
- 178 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 223 words of extra memory for PDF output out of 10000 (max. 10000000)
 

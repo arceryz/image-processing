@@ -31,6 +31,17 @@
 	\end{minipage}%
 }
 
+\newcommand{\bigimagecell}[3]{%
+	\begin{minipage}[t]{\linewidth}
+		\centering
+		\includegraphics[
+		height=#3,
+		keepaspectratio
+		]{#1}\\
+		{\scriptsize #2}
+	\end{minipage}%
+}
+
 \title{Image Processing\\Assignment 1}
 \author{Timothy van der Valk\\2336715}
 
@@ -373,9 +384,101 @@ use larger structure sizes. This effect can be seen in Figure \ref{task3_plot}.
 
 \restoregeometry
 \pagebreak
+
+\section*{Extra | Canny Edge Detection} %{{{1
+%{{{2
+
+I implemented Canny Edge Detection with the following steps based on \cite{advanced_texbook}:
+
+\begin{enumerate}
+	\item Smooth the image using a Gaussian filter.
+		I generally used $\sigma=1$, unless the image has a higher noise.
+	\item Compute the edge magnitude using Sobel filters.
+	\item Perform edge localization by testing for local maxima.
+	\item Perform edge tracing and hysteresis thresholding on the local maxima.
+		The thresholds are a percentage of the maximum edge magnitude.
+	\item Color the pixels in the same hysteresis flood group with the same random color.
+		This gives an insight into the efficiency of finding longer edge segments, and is useful
+		for debugging.
+\end{enumerate}
+
+Depending on the presence of noise and other weak backgrounds edges in the image, 
+I tweaked the Gaussian smoothing and high hysteresis threshold.
+
+\subsection*{Analysis}
+
+See the results in Figure \ref{extra1}. It is clear that compared to thresholding-based edge detection,
+the Canny Edge Detector is much better adapted for detail and precise edge extraction.
+The pixel groupings represented by the colors are connected sections of edges, and could be further
+processed for the purpose of recognizing shapes.
+
+For the fourth image in Figure \ref{extra1}, the Canny Edge Detector almost perfectly found the edges
+of the airplane and the high-frequency edges on the exhaust. In the last image with cables, I had
+to use a higher smoothing and hysteresis threshold to cut away the small edges corresponding to the
+grass in the background.
+
+My analysis for the effect of the two thresholds, is that the low threshold is far less influencial,
+and only in certain cases introduces a slightly longer group of pixels if it is lowered. The high threshold
+is a key parameter to control the minimum edge magnitude relative to the maximum, when an edge is started 
+with flood fill. I increased this parameter for images 1 and 5 due to their strong background edges.
+This cleared away some of them. For image 2, I reduced the threshold to obtain more edges, in particular for the hair.
+
+\pagebreak
+
+% Images {{{2
+\newgeometry{
+    left=8mm,
+    right=8mm,
+    top=15mm,
+    bottom=8mm
+}
+
+\begin{figure}[H]
+	\begin{tabularx}{\textwidth}{XX}
+		% Tram
+		\bigimagecell{results/image\_for\_tasks1and2.png}{Reference image.}{30mm}
+		&
+		\bigimagecell{results/extra1/tram\_hyster03.png}{Canny Edge Detection with $\sigma=1$ and $h=0.3$.}{30mm}
+		\\[0.7cm]
+
+		% Lena
+		\bigimagecell{results/lena\_median.png}{Reference image.}{50mm}
+		&
+		\bigimagecell{results/extra1/lena.png}{Canny Edge Detection with $\sigma=1$ and $h=0.15$.}{50mm}
+		\\[0.7cm]
+
+		% Flower
+		\bigimagecell{results/flower.png}{Reference image.}{50mm}
+		&
+		\bigimagecell{results/extra1/flower.png}{Canny Edge Detection with $\sigma=1$ and $h=0.2$.}{50mm}
+		\\[0.7cm]
+
+		% Airplane
+		\bigimagecell{results/airplane.png}{Reference image.}{40mm}
+		&
+		\bigimagecell{results/extra1/airplane.png}{Canny edge Detection with $\sigma=1$ and $h=0.2$.}{40mm}
+		\\[0.7cm]
+
+		% Cables
+		\bigimagecell{results/cables.png}{Reference image.}{40mm}
+		&
+		\bigimagecell{results/extra1/cables.png}{Canny Edge Detection with $\sigma=2$ and $h=0.3$}{40mm}
+		\\[0.7cm]
+
+	\end{tabularx}
+	\captionof{table}{
+	Canny Edge Detection applied to a variety of images. }
+	\label{extra1}
+\end{figure}
+
+\restoregeometry
+\pagebreak
+
 \begin{thebibliography}{9} %{{{1
 \bibitem{texbook}
 Principles of Digital Image Processing: Fundamental Techniques, Wilhelm Burger, Mark J. Burge. Springer 2009.
+\bibitem{advanced_texbook}
+Principles of Digital Image Processing: Advanced Methods, Wilhelm Burger, Mark J. Burge. Springer 2013.
 \end{thebibliography}
 
 \end{document}

@@ -175,7 +175,7 @@ namespace ImageApp
 				if (file == null)
 					return;
 
-				using var bmp = ByteArrayToBitmap(_processedGray);
+				using var bmp = ProcessedImage.Source as Bitmap;
 				await using var stream = await file.OpenWriteAsync();
 				bmp.Save(stream);
 				StatusText.Text = "Processed image saved successfully.";
