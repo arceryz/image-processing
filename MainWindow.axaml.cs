@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -7,6 +8,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Data;
+using System.Diagnostics;
 
 namespace ImageApp
 {
@@ -57,7 +59,13 @@ namespace ImageApp
 			Task1,
 			Task2,
 			Task3,
-			Extra1CannyEdgeDetection
+			Extra1CannyEdgeDetection,
+			SequentialRegionLabeling,
+			HoughTransform,
+			HoughPeakFinding,
+			HoughLineSegments,
+			BinaryLineDetection,
+			GrayscaleLineDetection,
 		}
 
 		public MainWindow()
@@ -148,7 +156,7 @@ namespace ImageApp
 		/// </summary>
 		private async void OnSaveImage(object? sender, RoutedEventArgs e)
 		{
-			if (_processedGray == null)
+			if (ProcessedImage.Source == null)
 			{
 				StatusText.Text = "No processed image to save. Apply an operation first.";
 				return;
@@ -239,205 +247,160 @@ namespace ImageApp
 
 				// Run computation and bitmap generation on a background task
 				// to keep the UI dispatcher thread responsive during heavy operations.
-				var (resultGray, resultBmp) = await Task.Run(() =>
-						{
-						// Grayscale conversion happens here on every Apply so every
-						// operation always starts from the original loaded image, never chained
-						// from a previous Apply's result.
-						byte[,] gray = ConvertToGrayscale(colorPixels);
-						
-						WriteableBitmap customBitmap = null;
-
-						switch (selected)
-						{
-						case ProcessingFunctions.Extra1CannyEdgeDetection:
-						{
-
-							(int[,] classes, int numClasses) = CannyEdgeDetection(gray, sigma, hysterLow, hysterHigh);
-
-							// Assign random hues to each of the color classes.
-							List<float> hues = new();
-							for (int i = 0; i < numClasses; i++)
-							{
-								hues.Add((float)i / numClasses);
-							}
-
-							float[] assignedHues = new float[numClasses];
-							Random rand = new();
-							for (int i = 0; i < numClasses; i++)
-							{
-								int sel = rand.Next(hues.Count);
-								assignedHues[i] = hues[sel];
-								hues.RemoveAt(sel);
-							}
-
-							int w = gray.GetLength(0);
-							int h = gray.GetLength(1);
-							customBitmap = new WriteableBitmap(
-									new PixelSize(w, h),
-									new Vector(96, 96),
-									PixelFormat.Rgba8888);
-
-							// Create the image data.
-							byte[] imageBytes = new byte[w*h*4];
-							for (int x = 0; x < w; x++)
-							for (int y = 0; y < h; y++)
-							{
-								int colorClass = classes[x, y];
-								var col = new Color(255, 0, 0, 0);
-
-								if (colorClass > 0)
-								{
-									float hue = assignedHues[colorClass-1];
-									var hsv = new HsvColor(1.0, hue*360, 1.0, 1.0);
-									col = hsv.ToRgb();
-								}
-
-								int baseIndex = 4 * (x + y * w);
-								imageBytes[baseIndex] = col.R;
-								imageBytes[baseIndex+1] = col.G;
-								imageBytes[baseIndex+2] = col.B;
-								imageBytes[baseIndex+3] = 255;
-							}
-
-							using (var fb = customBitmap.Lock()) 
-							{
-								Marshal.Copy(imageBytes, 0, fb.Address, imageBytes.Length);
-							}
-							break;
-						}
-						case ProcessingFunctions.Task3:
-						{
-							// Apply binary closing.
-							gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
-							break;
-						}
-						case ProcessingFunctions.Task2:
-						{
-							// Apply grayscale erosion.
-							gray = GrayscaleErodeImage(gray, CreateSquareStructureElement(structureElementSize));
-							break;
-						}
-						case ProcessingFunctions.Task1:
-						{
-							// Step 1. Either Gaussian or Median Filter.
-							if (bUseGaussian)
-							{
-								float[,] gaussianFilter = CreateGaussianFilter(kernelSize, sigma);
-								gray = ConvolveImage(gray, gaussianFilter);
-							}
-							else
-							{
-								gray = MedianFilter(gray, kernelSize);
-							}
-
-							// Step 2. Apply Edge Detection.
-							(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
-							
-							// Step 3. Apply Thresholding.
-							gray = ThresholdImage(gray, threshold);
-							break;
-						}
-
-						case ProcessingFunctions.ConvertToGrayscale:
-						// Already fully working; gray already holds the grayscale
-						// conversion result at this point (computed above, before this switch),
-						// so nothing further is needed here.
-						break;
-						case ProcessingFunctions.InvertImage:
-						gray = InvertImage(gray);
-						break;
-						case ProcessingFunctions.AdjustContrast:
-						gray = AdjustContrast(gray);
-						break;
-						case ProcessingFunctions.ConvolveImage:
-						gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
-						break;
-						case ProcessingFunctions.MedianFilter:
-						gray = MedianFilter(gray, kernelSize);
-						break;
-						case ProcessingFunctions.EdgeMagnitude:
-						{
-							(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
-							break;
-						}
-						case ProcessingFunctions.ThresholdImage:
-						gray = ThresholdImage(gray, _threshold);
-						break;
-
-						case ProcessingFunctions.BinaryErodeImage:
-						{
-							gray = BinaryErodeImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
-							break;
-						}
-
-						case ProcessingFunctions.BinaryDilateImage:
-						{
-							// Dilate expanding.
-							gray = BinaryDilateImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
-							break;
-						}
-
-						case ProcessingFunctions.BinaryOpenImage:
-						{
-							gray = BinaryOpenImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
-							break;
-						}
-
-						case ProcessingFunctions.BinaryCloseImage:
-						{
-							gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
-							break;
-						}
-
-						case ProcessingFunctions.GrayscaleErodeImage:
-						{
-							int[,] grayStructElem = CreateRadialStructureElement(10);
-							gray = GrayscaleErodeImage(gray, grayStructElem);
-							break;
-						}
-
-						case ProcessingFunctions.GrayscaleDilateImage:
-						{
-							int[,] grayStructElem = CreateRadialStructureElement(10);
-							gray = GrayscaleDilateImage(gray, grayStructElem);
-							break;
-						}
-
-						default:
-						throw new NotSupportedException($"Operation '{selected}' is not implemented in the OnApply switch.");
-						}
-
-						var bmp = customBitmap == null ? ByteArrayToBitmap(gray): customBitmap;
-						return (gray, bmp);
-						});
-
-				_processedGray = resultGray;
-				(ProcessedImage.Source as IDisposable)?.Dispose();
-				ProcessedImage.Source = resultBmp;
-
-				// Compute number of different values and average.
-				float averageIntensity = 0;
-				int numDistinctIntensities = 0;
-				int numForegroundPixels = 0;
-
-				bool[] seenIntensities = new bool[256];
-				foreach (byte b in resultGray)
+				object result = await Task.Run(() =>
 				{
-					if (b == 255)
+					// Grayscale conversion happens here on every Apply so every
+					// operation always starts from the original loaded image, never chained
+					// from a previous Apply's result.
+					byte[,] gray = ConvertToGrayscale(colorPixels);
+					int w = gray.GetLength(0);
+					int h = gray.GetLength(1);
+					Color[,] colorImg = new Color[gray.GetLength(0), gray.GetLength(1)];
+					
+					switch (selected)
 					{
-						numForegroundPixels++;
-					}
-					if (!seenIntensities[b])
+					case ProcessingFunctions.HoughTransform:
 					{
-						seenIntensities[b] = true;
-						numDistinctIntensities++;
+						byte[,] hough = NormalizeIntImage(HoughTransform(gray, 512));
+						return hough;
 					}
-					averageIntensity += b;
-				}
-				averageIntensity /= resultGray.Length;
+					case ProcessingFunctions.SequentialRegionLabeling:
+					{
+						(int[,] regionImg, int numRegions) = SequentialRegionLabeling(gray);
+						Debug.Print($"{numRegions} regions");
+						Color[] colors = GetRandomColors(numRegions, 98743);
 
-				StatusText.Text = $"Completed {selected}. Kernel={kernelSize}, Sigma={sigma}, Threshold={threshold}. Unique={numDistinctIntensities}, Average={averageIntensity} over {resultGray.Length} pixels, Foreground={numForegroundPixels}";
+						for (int x = 0; x < w; x++)
+						for (int y = 0; y < h; y++)
+						{
+							int lb = regionImg[x, y];
+							colorImg[x, y] = lb > 0 ? colors[lb - 1]: Colors.Black;
+						}
+						return colorImg;
+					}
+					case ProcessingFunctions.Extra1CannyEdgeDetection:
+					{
+						(int[,] classes, int numClasses) = CannyEdgeDetection(gray, sigma, hysterLow, hysterHigh);
+						Color[] colors = GetRandomColors(numClasses);
+
+						// Create the image data.
+						for (int x = 0; x < w; x++)
+						for (int y = 0; y < h; y++)
+						{
+							int colorClass = classes[x, y];
+							colorImg[x, y] = colorClass > 0 ? Colors.White: Colors.Black;
+						}
+
+						return colorImg;
+					}
+					case ProcessingFunctions.Task3:
+					{
+						// Apply binary closing.
+						gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.Task2:
+					{
+						// Apply grayscale erosion.
+						gray = GrayscaleErodeImage(gray, CreateSquareStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.Task1:
+					{
+						// Step 1. Either Gaussian or Median Filter.
+						if (bUseGaussian)
+						{
+							float[,] gaussianFilter = CreateGaussianFilter(kernelSize, sigma);
+							gray = ConvolveImage(gray, gaussianFilter);
+						}
+						else
+						{
+							gray = MedianFilter(gray, kernelSize);
+						}
+
+						// Step 2. Apply Edge Detection.
+						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+
+						// Step 3. Apply Thresholding.
+						gray = ThresholdImage(gray, threshold);
+						break;
+					}
+					case ProcessingFunctions.ConvertToGrayscale:
+					// Already fully working; gray already holds the grayscale
+					// conversion result at this point (computed above, before this switch),
+					// so nothing further is needed here.
+					break;
+					case ProcessingFunctions.InvertImage:
+					gray = InvertImage(gray);
+					break;
+					case ProcessingFunctions.AdjustContrast:
+					gray = AdjustContrast(gray);
+					break;
+					case ProcessingFunctions.ConvolveImage:
+					gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
+					break;
+					case ProcessingFunctions.MedianFilter:
+					gray = MedianFilter(gray, kernelSize);
+					break;
+					case ProcessingFunctions.EdgeMagnitude:
+					{
+						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+						break;
+					}
+					case ProcessingFunctions.ThresholdImage:
+					gray = ThresholdImage(gray, _threshold);
+					break;
+					case ProcessingFunctions.BinaryErodeImage:
+					{
+						gray = BinaryErodeImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.BinaryDilateImage:
+					{
+						// Dilate expanding.
+						gray = BinaryDilateImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.BinaryOpenImage:
+					{
+						gray = BinaryOpenImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.BinaryCloseImage:
+					{
+						gray = BinaryCloseImage(gray, CreateSquareBinaryStructureElement(structureElementSize));
+						break;
+					}
+					case ProcessingFunctions.GrayscaleErodeImage:
+					{
+						int[,] grayStructElem = CreateRadialStructureElement(10);
+						gray = GrayscaleErodeImage(gray, grayStructElem);
+						break;
+					}
+					case ProcessingFunctions.GrayscaleDilateImage:
+					{
+						int[,] grayStructElem = CreateRadialStructureElement(10);
+						gray = GrayscaleDilateImage(gray, grayStructElem);
+						break;
+					}
+					default:
+					throw new NotSupportedException($"Operation '{selected}' is not implemented in the OnApply switch.");
+					}
+
+					return (object)gray;
+				});
+
+				WriteableBitmap bmp = result switch 
+				{
+					Color[,] colorImg => ColorArrayToBitmap(colorImg),
+					byte[,] grayImg => ByteArrayToBitmap(grayImg),
+					_ => throw new NotSupportedException()
+				};
+
+				(ProcessedImage.Source as IDisposable)?.Dispose();
+				ProcessedImage.Source = bmp;
+
+				StatusText.Text = "Completed";
 			}
 			catch (Exception ex)
 			{
@@ -1167,6 +1130,243 @@ namespace ImageApp
 				arr[x, y] /= sum;
 			}
 			return arr;
+		}
+
+		byte[,] EdgeClassesToEdgeImage(int[,] classes)
+		{
+			int w = classes.GetLength(0);
+			int h = classes.GetLength(1);
+			byte[,] edgeMap = new byte[w, h];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				edgeMap[x, y] = (byte)(classes[x, y] > 0 ? 255: 0);
+			}
+			
+			return edgeMap;
+		}
+
+		// PART 2
+
+		(int[,], int) SequentialRegionLabeling(byte[,] input)
+		{
+			int[,] outputLabels = new int[input.GetLength(0), input.GetLength(1)];
+
+			// Define the 8 pixels in the neighborhood.
+			int[,] n8 = {
+				{ -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }
+			};
+
+			int w = input.GetLength(0);
+			int h = input.GetLength(1);
+			int numLabels = 0;
+
+			List<(int, int)> collisions = [];
+
+			// Step 1: Assign labels.
+			for (int y = 0; y < h; y++)
+			for (int x = 0; x < w; x++)
+			{
+				// Set default value.
+				if (input[x, y] == 0)
+				{
+					outputLabels[x, y] = 0;
+					continue;
+				}
+
+				// Determine smallest neighboring label, if any.
+				List<int> neighboringLabels = [];
+				for (int i = 0; i < 4; i++)
+				{
+					int nx = x + n8[i, 0];
+					int ny = y + n8[i, 1];
+					if (nx >= 0 && nx < w && ny >= 0)
+					{
+						// Add the label if it is not a background pixel.
+						int lb = outputLabels[nx, ny];
+						if (lb > 0)
+						{
+							neighboringLabels.Add(lb);
+						}
+					}
+				}
+
+				int label = numLabels + 1;
+				if (neighboringLabels.Count == 0)
+				{
+					numLabels++;
+				}
+				else
+				{
+					label = neighboringLabels[0];
+					if (neighboringLabels.Count > 1)
+					{
+						for (int i = 1; i < neighboringLabels.Count; i++)
+						{
+							collisions.Add((label, neighboringLabels[i]));
+						}
+					}
+				}
+				outputLabels[x, y] = label;
+			}
+
+			// Step 2: Resolve collisions.
+			
+			// Create initial partition of label sets.
+			List<List<int>> labelSets = [];
+			for (int i = 0; i < numLabels; i++)
+			{
+				labelSets.Add([ i+1 ]);
+			}
+
+			foreach (var (a, b) in collisions)
+			{
+				// Find sets containing these labels.
+				List<int> aSet = labelSets.Find((list) => list.Contains(a));
+				List<int> bSet = labelSets.Find((list) => list.Contains(b));
+
+				// Merge if not the same.
+				if (aSet != bSet)
+				{
+					aSet.AddRange(bSet.Except(aSet));
+					labelSets.Remove(bSet);
+				}
+			}
+
+			// Step 3: Relabel image.
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				int label = outputLabels[x, y];
+				if (label == 0)
+					continue;
+				int regionIndex = labelSets.FindIndex((list) => list.Contains(label));
+				outputLabels[x, y] = regionIndex + 1;
+			}
+
+			return (outputLabels, labelSets.Count);
+		}
+
+		int[,] HoughTransform(byte[,] edgeImage, int nOutput)
+		{
+			int w = edgeImage.GetLength(0);
+			int h = edgeImage.GetLength(1);
+			int[,] accum = new int[nOutput, nOutput];
+
+			double xCenter = (double)w / 2;
+			double yCenter = (double)h / 2;
+
+			double rStep = 2 * Math.Sqrt(xCenter * xCenter + yCenter * yCenter) / nOutput;
+			float thetaStep = MathF.PI / nOutput;
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				if (edgeImage[x, y] == 0)
+				{
+					continue;
+				}
+
+				double xrel = x - xCenter;
+				double yrel = y - yCenter;
+
+				// Iterate all possible theta.
+				for (int i = 0; i < nOutput; i++)
+				{
+					double theta = i * thetaStep;
+					double r = xrel * Math.Cos(theta) + yrel * Math.Sin(theta);
+					int rIndex = Math.Clamp(nOutput / 2 + (int)Math.Round(r / rStep), 0, nOutput-1);
+
+					// Insert into accumulator array.
+					accum[i, rIndex] += 1;
+				}
+			}
+
+			return accum;
+		}
+
+		byte[,] NormalizedHoughTransform(byte[,] edgeImage, int nOutput)
+		{
+			int w = edgeImage.GetLength(0);
+			int h = edgeImage.GetLength(1);
+			byte[,] white = new byte[w, h];
+			
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				white[x, y] = 255;
+			}
+
+			int[,] maxCounts = HoughTransform(white, nOutput);
+			int[,] hough = HoughTransform(edgeImage, nOutput);
+			byte[,] normalizedHough = new byte[nOutput, nOutput];
+
+			for (int x = 0; x < nOutput; x++)
+			for (int y = 0; y < nOutput; y++)
+			{
+				normalizedHough[x, y] = (byte)(255 * (float)hough[x, y] / maxCounts[x, y]);
+			}
+
+			return normalizedHough;
+		}
+
+		WriteableBitmap ColorArrayToBitmap(Color[,] colorImage)
+		{
+			int w = colorImage.GetLength(0);
+			int h = colorImage.GetLength(1);
+			var bmp = new WriteableBitmap(new PixelSize(w, h), new(96, 96), PixelFormat.Rgba8888,
+					AlphaFormat.Opaque);
+			using var fb = bmp.Lock();
+			byte[] buffer = new byte[fb.RowBytes * h];
+			for (int y = 0; y < h; y++)
+			{
+				int rowStart = y * fb.RowBytes;
+				for (int x = 0; x < w; x++)
+				{
+					int idx = rowStart + x * 4;
+					buffer[idx + 0] = colorImage[x, y].R; // R
+					buffer[idx + 1] = colorImage[x, y].G; // G
+					buffer[idx + 2] = colorImage[x, y].B; // B
+					buffer[idx + 3] = 255;
+				}
+			}
+			Marshal.Copy(buffer, 0, fb.Address, buffer.Length);
+			return bmp;
+		}
+
+		// Get random colors that are guaranteed to be evenly spaced by hue.
+		Color[] GetRandomColors(int count, int seed=0)
+		{
+			// Assign random hues to each of the color classes.
+			int[] shuffled = [ .. Enumerable.Range(0, count) ];
+			Random rnd = new(seed);
+			rnd.Shuffle(shuffled);
+
+			Color[] colors = new Color[count];
+			for (int i = 0; i < count; i++)
+			{
+				colors[i] = new HsvColor(1.0, (float)shuffled[i] / count * 360.0f, 1.0, 1.0).ToRgb();
+			}
+
+			return colors;
+		}
+
+		byte[,] NormalizeIntImage(int[,] input)
+		{
+			int w = input.GetLength(0);
+			int h = input.GetLength(1);
+			byte[,] output = new byte[w, h];
+
+			int max = Math.Max(1, input.Cast<int>().Max());
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				output[x, y] = (byte)(255 * (float)input[x, y] / max);
+			}
+
+			return output;
 		}
 	}
 }
