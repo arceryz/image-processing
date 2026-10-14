@@ -9,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Data;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace ImageApp
 {
@@ -259,24 +260,23 @@ namespace ImageApp
 					
 					switch (selected)
 					{
+					case ProcessingFunctions.HoughPeakFinding:
+					{
+						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
+						(int[,] regionMap, Vector2[] means) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
+						return CreateRegionColorImage(regionMap, means.GetLength(0));
+					}
 					case ProcessingFunctions.HoughTransform:
 					{
-						byte[,] hough = NormalizeIntImage(HoughTransform(gray, 512));
+						(int[,] accumulator, _) = HoughTransform(gray, 512);
+						byte[,] hough = NormalizeIntImage(accumulator);
 						return hough;
 					}
 					case ProcessingFunctions.SequentialRegionLabeling:
 					{
 						(int[,] regionImg, int numRegions) = SequentialRegionLabeling(gray);
 						Debug.Print($"{numRegions} regions");
-						Color[] colors = GetRandomColors(numRegions, 98743);
-
-						for (int x = 0; x < w; x++)
-						for (int y = 0; y < h; y++)
-						{
-							int lb = regionImg[x, y];
-							colorImg[x, y] = lb > 0 ? colors[lb - 1]: Colors.Black;
-						}
-						return colorImg;
+						return CreateRegionColorImage(regionImg, numRegions);
 					}
 					case ProcessingFunctions.Extra1CannyEdgeDetection:
 					{
@@ -1248,16 +1248,41 @@ namespace ImageApp
 			return (outputLabels, labelSets.Count);
 		}
 
-		int[,] HoughTransform(byte[,] edgeImage, int nOutput)
+		// Given a region-labeled image and num regions, compute the mean position of those regions.
+		Vector2[] GetRegionMeanPoints(int[,] regionMap, int numRegions)
+		{
+			var regionMeans = new Vector2[numRegions];
+			var regionSizes = new int[numRegions];
+
+			for (int x = 0; x < regionMap.GetLength(0); x++)
+			for (int y = 0; y < regionMap.GetLength(1); y++)
+			{
+				int region = regionMap[x, y];
+				if (region == 0)
+					continue;
+				regionMeans[region-1] += new Vector2(x, y);
+				regionSizes[region-1] += 1;
+			}
+
+			for (int i = 0; i < regionMeans.Length; i++)
+			{
+				regionMeans[i] /= regionSizes[i];
+			}
+
+			return regionMeans;
+		}
+
+		// Performs HoughTransform and also returns the (thetaStep, rStep) needed to compute the parameters back.
+		(int[,], Vector2) HoughTransform(byte[,] edgeImage, int nOutput)
 		{
 			int w = edgeImage.GetLength(0);
 			int h = edgeImage.GetLength(1);
 			int[,] accum = new int[nOutput, nOutput];
 
-			double xCenter = (double)w / 2;
-			double yCenter = (double)h / 2;
+			float xCenter = (float)w / 2;
+			float yCenter = (float)h / 2;
 
-			double rStep = 2 * Math.Sqrt(xCenter * xCenter + yCenter * yCenter) / nOutput;
+			float rStep = 2 * MathF.Sqrt(xCenter * xCenter + yCenter * yCenter) / nOutput;
 			float thetaStep = MathF.PI / nOutput;
 
 			for (int x = 0; x < w; x++)
@@ -1268,25 +1293,28 @@ namespace ImageApp
 					continue;
 				}
 
-				double xrel = x - xCenter;
-				double yrel = y - yCenter;
+				float xrel = x - xCenter;
+				float yrel = y - yCenter;
 
 				// Iterate all possible theta.
 				for (int i = 0; i < nOutput; i++)
 				{
-					double theta = i * thetaStep;
-					double r = xrel * Math.Cos(theta) + yrel * Math.Sin(theta);
+					float theta = i * thetaStep;
+					float r = xrel * MathF.Cos(theta) + yrel * MathF.Sin(theta);
 					int rIndex = Math.Clamp(nOutput / 2 + (int)Math.Round(r / rStep), 0, nOutput-1);
 
 					// Insert into accumulator array.
-					accum[i, rIndex] += 1;
+					// If this is a binary image, then "1" will be replaced by "255".
+					// If this is a grayscale image, then this works as expected by adding the intensity.
+					// No need to test whether we have a binary image for adding 1 instead.
+					accum[i, rIndex] += edgeImage[x, y];
 				}
 			}
 
-			return accum;
+			return (accum, new Vector2(thetaStep, rStep));
 		}
 
-		byte[,] NormalizedHoughTransform(byte[,] edgeImage, int nOutput)
+		(int[,], Vector2) NormalizedHoughTransform(byte[,] edgeImage, int nOutput)
 		{
 			int w = edgeImage.GetLength(0);
 			int h = edgeImage.GetLength(1);
@@ -1298,17 +1326,52 @@ namespace ImageApp
 				white[x, y] = 255;
 			}
 
-			int[,] maxCounts = HoughTransform(white, nOutput);
-			int[,] hough = HoughTransform(edgeImage, nOutput);
-			byte[,] normalizedHough = new byte[nOutput, nOutput];
+			(int[,] maxCounts, _) = HoughTransform(white, nOutput);
+			(int[,] hough, Vector2 steps) = HoughTransform(edgeImage, nOutput);
+			int[,] normalizedHough = new int[nOutput, nOutput];
 
 			for (int x = 0; x < nOutput; x++)
 			for (int y = 0; y < nOutput; y++)
 			{
-				normalizedHough[x, y] = (byte)(255 * (float)hough[x, y] / maxCounts[x, y]);
+				normalizedHough[x, y] = (byte)(255 * (float)hough[x, y] / Math.Max(1, maxCounts[x, y]));
 			}
 
-			return normalizedHough;
+			return (normalizedHough, steps);
+		}
+
+		private (int[,] regionMap, Vector2[]) HoughPeakFinding(int[,] accumulator, Vector2 thetaRSteps, float peakThresholdPercent, int closeStructureSize=15)
+		{
+			int w = accumulator.GetLength(0);
+
+			// Maximum value is used in threshold.
+			// Regardless of whether this is a binary image or a grayscale image.
+			int max = accumulator.Cast<int>().Max();
+
+			// I use option A: Thresholding, Closing and Region finding.
+			// Step 1: Thresholding based on percentage of max.
+			byte[,] temporary = new byte[w, w];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < w; y++)
+			{
+				temporary[x, y] = (byte)((accumulator[x, y] > max * peakThresholdPercent) ? 255: 0);
+			}
+
+			// Step 2: Binary Closing to fix gaps.
+			temporary = BinaryCloseImage(temporary, CreateSquareBinaryStructureElement(closeStructureSize));
+
+			// Step 3: Region finding to get lines.
+			(int[,] regionMap, int numRegions) = SequentialRegionLabeling(temporary);
+			Vector2[] regionMeans = GetRegionMeanPoints(regionMap, numRegions);
+
+			// Turn the index representations of the means (thetaIndex, rIndex) into actual values.
+			for (int i = 0; i < numRegions; i++)
+			{
+				Vector2 mean = regionMeans[i];
+				regionMeans[i] = new Vector2(mean.X * thetaRSteps.X, (mean.Y - w/2) * thetaRSteps.Y);
+			}
+		
+			return (regionMap, regionMeans);
 		}
 
 		WriteableBitmap ColorArrayToBitmap(Color[,] colorImage)
@@ -1335,12 +1398,28 @@ namespace ImageApp
 			return bmp;
 		}
 
+		Color[,] CreateRegionColorImage(int[,] regionMap, int numRegions)
+		{
+			int w = regionMap.GetLength(0);
+			int h = regionMap.GetLength(1);
+			Color[] colors = GetRandomColors(numRegions);
+			var image = new Color[w, h];
+
+			for (int x = 0; x < regionMap.GetLength(0); x++)
+				for (int y = 0; y < regionMap.GetLength(1); y++)
+				{
+					int lb = regionMap[x, y];
+					image[x, y] = lb > 0 ? colors[lb - 1]: Colors.Black;
+				}
+			return image;
+		}
+
 		// Get random colors that are guaranteed to be evenly spaced by hue.
-		Color[] GetRandomColors(int count, int seed=0)
+		Color[] GetRandomColors(int count)
 		{
 			// Assign random hues to each of the color classes.
 			int[] shuffled = [ .. Enumerable.Range(0, count) ];
-			Random rnd = new(seed);
+			Random rnd = new(0);
 			rnd.Shuffle(shuffled);
 
 			Color[] colors = new Color[count];
