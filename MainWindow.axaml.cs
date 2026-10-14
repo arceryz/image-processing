@@ -260,11 +260,22 @@ namespace ImageApp
 					
 					switch (selected)
 					{
+					case ProcessingFunctions.HoughLineSegments:
+					{
+						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
+						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
+						var segments = HoughLineSegments(gray, peaks, threshold, 16, 4);
+						return CreateLineSegmentOverlayImage(gray, segments);
+					}
 					case ProcessingFunctions.HoughPeakFinding:
 					{
 						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
-						(int[,] regionMap, Vector2[] means) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
-						return CreateRegionColorImage(regionMap, means.GetLength(0));
+						(int[,] regionMap, Vector2[] rTheta) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
+						foreach (Vector2 vec in rTheta)
+						{
+							Debug.Print($"r: {vec.X}, theta: {vec.Y}");
+						}
+						return CreateRegionColorImage(regionMap, rTheta.GetLength(0));
 					}
 					case ProcessingFunctions.HoughTransform:
 					{
@@ -1339,7 +1350,7 @@ namespace ImageApp
 			return (normalizedHough, steps);
 		}
 
-		private (int[,] regionMap, Vector2[]) HoughPeakFinding(int[,] accumulator, Vector2 thetaRSteps, float peakThresholdPercent, int closeStructureSize=15)
+		private (int[,] regionMap, Vector2[]) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)
 		{
 			int w = accumulator.GetLength(0);
 
@@ -1364,14 +1375,159 @@ namespace ImageApp
 			(int[,] regionMap, int numRegions) = SequentialRegionLabeling(temporary);
 			Vector2[] regionMeans = GetRegionMeanPoints(regionMap, numRegions);
 
-			// Turn the index representations of the means (thetaIndex, rIndex) into actual values.
+			// Turn the index representations of the means (rIndex, thetaIndex) into actual values.
 			for (int i = 0; i < numRegions; i++)
 			{
 				Vector2 mean = regionMeans[i];
-				regionMeans[i] = new Vector2(mean.X * thetaRSteps.X, (mean.Y - w/2) * thetaRSteps.Y);
+				regionMeans[i] = new Vector2((mean.Y - w/2) * rThetaSteps.Y, mean.X * rThetaSteps.X);
 			}
 		
 			return (regionMap, regionMeans);
+		}
+
+		private List<(Vector2, Vector2)> HoughLineSegments(byte[,] edgeImage, Vector2[] rThetaPeaks, int minIntensity, int minSegmentLength, int maxGap)
+		{
+			List<(Vector2, Vector2)> lineSegments = [];
+
+			int w = edgeImage.GetLength(0);
+			int h = edgeImage.GetLength(1);
+
+			// We need rmax to start the line trace at the boundaries of the image.
+			var center = new Vector2(w, h) / 2;
+			float rmax = MathF.Sqrt(center.X*center.X + center.Y*center.Y);
+
+			float traceStep = 0.5f;
+
+			foreach (var rt in rThetaPeaks)
+			{
+				float r = rt.X;
+				float theta = rt.Y;
+
+				// Determine direction of line, this is a rotated variant of the line normal,
+				// the line normal is (cos, sin) since the equation is x*cos + y*sin = r.
+				var normal = new Vector2(MathF.Cos(theta), MathF.Sin(theta));
+				var direction = new Vector2(normal.Y, -normal.X);
+
+				// Start pos is -rmax from the point closest to the image center.
+				// Then we can trace from the outside of the image to the other side.
+				// More optimal would be to compute the actual intersection with the image boundaries.
+				Vector2 startPos = center + normal * r - rmax * direction;
+				Vector2 endPos = center + normal * r + rmax * direction;
+
+				float distance = 2*rmax;
+
+				bool isTracingSegment = false;
+				float currentGapDistance = 0;
+				Vector2 segmentStart = Vector2.Zero;
+				Vector2 segmentEnd = Vector2.Zero;
+
+				// Trace the edge.
+				for (float offset = 0; offset < distance; offset += traceStep)
+				{
+					Vector2 pix = startPos + direction * offset;
+					int x = (int)pix.X;
+					int y = (int)pix.Y;
+
+					// If valid point on line, set intensity.
+					// -1 means outside of image.
+					int val = -1;
+					if (0 <= x && x < w && 0 <= y && y < h)
+					{
+						int radius = 1;
+						for (int i = -radius; i <= radius; i++)
+						for (int j = -radius; j <= radius; j++)
+						{
+							int px = x + i;
+							int py = y + j;
+							if (0 <= px && px < w && 0 <= py && py < h)
+							{
+								val = Math.Max(val, edgeImage[px, py]);
+							}
+						}
+					}
+
+					// If sufficient intensity, keep tracing or start tracing.
+					if (val > minIntensity)
+					{
+						// Start tracing new line segment.
+						if (!isTracingSegment)
+						{
+							segmentStart = pix;
+							isTracingSegment = true;
+						}
+
+						// Reset gap distance while on the line.
+						// and also update segment end.
+						currentGapDistance = 0;
+						segmentEnd = pix;
+					}
+					// If tracing segment but insufficient intensity, keep track of gap.
+					else if (isTracingSegment)
+					{
+						// Keep track of gap distance.
+						currentGapDistance += traceStep;
+
+						// If gap too great or outside image, stop this line.
+						if (currentGapDistance > maxGap || val < 0)
+						{
+							if ((segmentEnd - segmentStart).Length() > minSegmentLength)
+							{
+								lineSegments.Add((segmentStart, segmentEnd));
+							}
+							isTracingSegment = false;
+						}
+					}
+				}
+			}
+
+			return lineSegments;
+		}
+
+		private Color[,] CreateLineSegmentOverlayImage(byte[,] sourceImage, List<(Vector2, Vector2)> segments)
+		{
+			int w = sourceImage.GetLength(0);
+			int h = sourceImage.GetLength(1);
+
+			var overlay = new Color[w, h];
+			
+			// Copy sourceImage.
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				byte val = sourceImage[x, y];
+				overlay[x, y] = new Color(255, val, val, val);
+			}
+
+			// Draw edges on top in red.
+			foreach (var segment in segments)
+			{
+				Vector2 lineHead = segment.Item1;
+				Vector2 direction = segment.Item2 - segment.Item1;
+				float distance = direction.Length();
+				direction /= distance;
+
+				for (float offset = 0; offset < distance; offset += 0.5f)
+				{
+					Vector2 pos = lineHead + offset * direction;
+					int x = (int)pos.X;
+					int y = (int)pos.Y;
+					if (x < 0 || x >= w || y < 0 || y >= h)
+						continue;
+					overlay[x, y] = Colors.Red;
+				}
+			}
+
+			return overlay;
+		}
+
+		Color MixColors(Color a, Color b, float f)
+		{
+			return new Color(
+				255,
+				(byte)(a.R*(1-f) + b.R*f),
+				(byte)(a.G*(1-f) + b.G*f),
+				(byte)(a.B*(1-f) + b.B*f)
+			);
 		}
 
 		WriteableBitmap ColorArrayToBitmap(Color[,] colorImage)
