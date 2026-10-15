@@ -62,21 +62,6 @@ I have implemented an edge detection pipeline consisting of the following steps:
 		it resulted in the most performant and consistent results for all kernel sizes.
 \end{enumerate}
 
-\subsection*{Analysis for Low-Noise Images}
-The results for a clean tram image can be seen in Table \ref{task1_clean}.
-The Median filter performs best on the smaller kernel, where it can remove small structures
-that are irrelevant to edge detection. As the kernel size grows, the Median filter quickly
-flattens many important surfaces, leaving only a few main edges visible after thresholding.
-The Gaussian in comparison performs far better but becomes thicker due to our increasing value for $\sigma$.
-
-\subsection*{Analysis for High-Noise Images}
-The results for a noisy tram image can be seen in Table \ref{task1_noisy}.
-In this case, it is clear that the Gaussian kernel is far worse for smaller kernels.
-This is caused by its inability to remove strong, small noise effectively when the noise is
-allowed to dominate a small amount of samples. The Median filter performs as expected
-by efficiently removing small structures of noise. However, it suffers from the same problem
-as before, where it flattens surfaces to the same brightness.
-This causes a majority of the edges to be lost.
 
 \pagebreak
 

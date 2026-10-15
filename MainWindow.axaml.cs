@@ -65,8 +65,8 @@ namespace ImageApp
 			HoughTransform,
 			HoughPeakFinding,
 			HoughLineSegments,
-			BinaryLineDetection,
-			GrayscaleLineDetection,
+			BinaryPipeline,
+			GrayscalePipeline,
 		}
 
 		public MainWindow()
@@ -246,6 +246,12 @@ namespace ImageApp
 				float hysterLow = (float)(HysteresisLow.Value ?? 0.05m);
 				float hysterHigh = (float)(HysteresisHigh.Value ?? 0.2m);
 
+				float peakThresholdPercent = (float)(PeakThresholdPercent.Value ?? 0.5m);
+				byte minLineIntensity = (byte)(LineMinIntensity.Value ?? 64);
+				byte maxGapLength = (byte)(LineMaxGapLength.Value ?? 4);
+				byte minLineLength = (byte)(LineMinLength.Value ?? 16);
+				byte houghClosingSize = (byte)(HoughClosingKernelSize.Value ?? 15);
+
 				// Run computation and bitmap generation on a background task
 				// to keep the UI dispatcher thread responsive during heavy operations.
 				object result = await Task.Run(() =>
@@ -260,6 +266,27 @@ namespace ImageApp
 					
 					switch (selected)
 					{
+					case ProcessingFunctions.GrayscalePipeline:
+					{
+						gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
+						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+
+						(int[,] accumulator, Vector2 steps) = NormalizedHoughTransform(gray, 512);
+						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
+						return CreateLineSegmentOverlayImage(gray, segments);
+					}
+					case ProcessingFunctions.BinaryPipeline:
+					{
+						gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
+						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+						gray = ThresholdImage(gray, threshold);
+
+						(int[,] accumulator, Vector2 steps) = NormalizedHoughTransform(gray, 512);
+						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
+						return CreateLineSegmentOverlayImage(gray, segments);
+					}
 					case ProcessingFunctions.HoughLineSegments:
 					{
 						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
@@ -1494,7 +1521,7 @@ namespace ImageApp
 			for (int x = 0; x < w; x++)
 			for (int y = 0; y < h; y++)
 			{
-				byte val = sourceImage[x, y];
+				byte val = (byte)(0.3 * sourceImage[x, y]);
 				overlay[x, y] = new Color(255, val, val, val);
 			}
 

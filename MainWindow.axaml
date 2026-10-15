@@ -67,6 +67,18 @@
 			<TextBlock Text="Hysteresis% High"/>
 			<NumericUpDown x:Name="HysteresisHigh" Minimum="0" Maximum="1" Increment="1" Value="0.2" ShowButtonSpinner="False" />
 		</StackPanel>
+		<StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,0,0,4">
+			<TextBlock Text="Peak Threshold%"/>
+			<NumericUpDown x:Name="PeakThresholdPercent" Minimum="0" Maximum="1" Increment="1" Value="0.5" ShowButtonSpinner="False" />
+			<TextBlock Text="Min Line Intensity"/>
+			<NumericUpDown x:Name="LineMinIntensity" Minimum="0" Maximum="255" Increment="1" Value="64" ShowButtonSpinner="False" />
+			<TextBlock Text="Min Line Length"/>
+			<NumericUpDown x:Name="LineMinLength" Minimum="0" Maximum="255" Increment="1" Value="16" ShowButtonSpinner="False" />
+			<TextBlock Text="Max Gap Length"/>
+			<NumericUpDown x:Name="LineMaxGapLength" Minimum="0" Maximum="255" Increment="1" Value="4" ShowButtonSpinner="False" />
+			<TextBlock Text="Closing Kernel Size"/>
+			<NumericUpDown x:Name="HoughClosingKernelSize" Minimum="0" Maximum="255" Increment="1" Value="15" ShowButtonSpinner="False" />
+		</StackPanel>
 		</StackPanel>
 
 		<TextBlock Grid.Row="3" x:Name="StatusText" Text="" TextWrapping="Wrap" Margin="0,4,0,0"/>
