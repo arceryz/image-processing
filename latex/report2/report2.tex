@@ -116,10 +116,11 @@ Minimum length was kept high similar to the Binary pipeline, this removed many o
 
 As an extra I have used the code in my NormalizedHoughTransform() function to return the
 maximum accumulator array for the input image. The result when applied to the tram image can be seen in Figure \ref{fig:hough_max}.
+There is a clear hotspot in the center due to the width of the tram image. This is why I decided to use the Normalized Hough Transform in my report.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=4cm]{results/maximum_tram.png}
+	\includegraphics[width=3.5cm]{results/maximum_tram.png}
 	\caption{Hough Maximum Counts 512x512 for a full white image in the same dimensions as the tram image.}
 	\label{fig:hough_max}
 \end{figure}
