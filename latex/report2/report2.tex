@@ -53,18 +53,17 @@
 I have implemented a Binary and Grayscale Line Detection pipeline in the following way:
 
 \begin{itemize}
-	\item Smooth the image using a varying Gaussian kernel.
+	\item Smooth the image using a Gaussian kernel.
 	\item Compute the Edge Magnitude image using horizontal and vertical Sobel kernels.
-	\item Apply thresholding from pixel value 75.
+	\item Apply thresholding.
 	\item Compute the \textbf{Normalized} Hough Transform using a fixed resolution of 512 pixels.
 		I decided to use the normalized variant because the wideness of the tram image caused
 		most vertical lines to not pass the peak threshold and be lost. My implementation also
 		makes no distinction between the grayscale and binary implementation. Binary images will simply
 		accumulate values of 255 for every pixel. Because peak-finding is relative to the max, this does not yield
 		different results compared to incrementing by 1. Also, normalization evens out these differences in scale either way.
-	\item Perform Hough Peak finding with a peak threshold at 50\% and varying Binary Closing kernel size.
-	\item Perform Line Segment Detection with varying minimum line intensity, minimum line length and
-		maximum gap length. In the line tracing code, I have decided to take the largest edge
+	\item Perform Hough Peak finding with a percentual peak threshold and Binary Closing.
+	\item Perform Line Segment Detection In the line tracing code, I have decided to take the largest edge
 		intensity in a neighborhood of 3x3 around the current pixel, to make it compatible with
 		Canny Edge Detection which outputs only 1-pixel thin lines. This approach yields more stable
 		lines for low-resolution images.
@@ -73,27 +72,21 @@ I have implemented a Binary and Grayscale Line Detection pipeline in the followi
 
 \section*{Task 1 | Binary Line Detection} %{{{1
 
-See Figure \ref{fig:task1}. A high minLen ($\geq 64$) results in better and more consistent edges for the tram,
-because it has several long horizontal lines that can make use of it. Comparing the images
-for $\text{minLen} = 64$ and $\text{minLen} = 128$, the key difference is that the latter 
-has ignored most smaller edges, and that it fused longer lines into one due to a slightly bigger gap (8 versus 4).
+See Figure \ref{fig:task1}. I have experimented with the peak threshold and the edge threshold.
+The effect of the edge threshold is to include more edges, which can both strengthen existing edges, and
+introduce many small and sporadic edges. A higher peak threshold will filter edges based on the strongest edges present.
+The effect of this parameter is that it cuts away many off the sporadic edges, since they are very small and can not compete
+with the long and dominant edges of the tram.
 
-I have also experimented with the size of the Binary Closing kernel, and found that it is generally
-better to leave it at a higher value ($\geq 15$) to prevent many similar and parallell lines in
-the output. But for the third image this had little impact due to the small number of overlapping lines.
-
-For the second image, the reduced minimum length allowed more lines on the interior of the tram.
-Paired with a much larger maxGap, these lines could jump over the small gaps between the door lines.
-Due to the low closing kernel, many parallell lines remain.
-
-I would pick the third image as the cleanest of the three due to it capturing both the
-main shape of the tram, some vertical lines corresponding to doors, and the two diagonal lines
-corresponding to the front cabin. It also has the least number of lines, making it the simplest.
+From the 3 parameter combinations, I would rate the middle one as the best balanced. It allows sufficient edges to
+be included in the Hough Transform, but also cuts away more weaker edges due to a higher peak threshold. The result is a
+strong fit on the dominant horziontal edges of the tram, and a decent fit on the doors and windows. The head of the tram is
+harder to detect due to the slight curvature.
 
 \section*{Task 2 | Grayscale Line Detection} %{{{1
 
-See Figure \ref{fig:task2}. A big noticeable difference between the Binary and Grayscale pipelines is that
-
+See Figure \ref{fig:task2}. 
+A big noticeable difference between the Binary and Grayscale pipelines is that
 grayscale includes far more sporadic edges as a consequence of high-intensity and high-frequency regions of
 blurred lines. In the first Grayscale image, you can see that many diagonal lines are rendered
 in places with a high average magnitude (bright spot). This is both a strength and a weakness of
@@ -136,11 +129,20 @@ There is a clear hotspot in the center due to the width of the tram image. This 
 	\begin{tabularx}{\textwidth}{X}
 		\imagecell{results/tram\_contrast.png}{Reference Image.}
 		\\[0.5cm]
-		\imagecell{results/task1\_good.png}{$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 15$.}
+		\imagecell{results/task1\_image1.png}{
+			$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{peakThreshold}=50\%,\;\text{edgeThreshold}=128\\
+			\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 15$.
+		}
 		\\[0.5cm]
-		\imagecell{results/task1\_bad\_gap.png}{$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{minLen} = 32,\;\text{maxGap} = 16,\;\text{closeKernel} = 5$.}
+		\imagecell{results/task1\_image2.png}{
+			$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{peakThreshold}=60\%,\;\text{edgeThreshold}=75\\
+			\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 15$.
+		}
 		\\[0.5cm]
-		\imagecell{results/task1\_long.png}{$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{minLen} = 128,\;\text{maxGap} = 8,\;\text{closeKernel} = 7$.}
+		\imagecell{results/task1\_image3.png}{
+			$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{peakThreshold}=45\%,\;\text{edgeThreshold}=100\\
+			\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 15$.
+		}
 	\end{tabularx}
 	\captionof{table}{
 	Binary Line Detection pipeline applied to contrast adjusted tram image.}
@@ -156,11 +158,11 @@ There is a clear hotspot in the center due to the width of the tram image. This 
 	\begin{tabularx}{\textwidth}{X}
 		\imagecell{results/tram\_contrast.png}{Reference Image.}
 		\\[0.5cm]
-		\imagecell{results/task2\_cross.png}{$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{minIntensity}=50,\;\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
+		\imagecell{results/task2\_cross.png}{$\text{gaussianKernel}=3,\; \sigma=0.4,\;\text{minIntensity}=50,\;\text{peakThreshold}=50\%\\\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
 		\\[0.5cm]
-		\imagecell{results/task2\_smooth7.png}{$\text{gaussianKernel}=7,\; \sigma=1.2,\;\text{minIntensity}=50,\;\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
+		\imagecell{results/task2\_smooth7.png}{$\text{gaussianKernel}=7,\; \sigma=1.2,\;\text{minIntensity}=50,\;\text{peakThreshold}=50\%\\\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
 		\\[0.5cm]
-		\imagecell{results/task2\_blur.png}{$\text{gaussianKernel}=11,\; \sigma=2,\;\text{minIntensity}=50,\;\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
+		\imagecell{results/task2\_blur.png}{$\text{gaussianKernel}=11,\; \sigma=2,\;\text{minIntensity}=50,\;\text{peakThreshold}=50\%\\\text{minLen} = 64,\;\text{maxGap} = 4,\;\text{closeKernel} = 5$.}
 	\end{tabularx}
 	\captionof{table}{
 	Grayscale Line Detection pipeline applied to contrast adjusted tram image.}
