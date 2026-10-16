@@ -79,6 +79,10 @@
 			<TextBlock Text="Closing Kernel Size"/>
 			<NumericUpDown x:Name="HoughClosingKernelSize" Minimum="0" Maximum="255" Increment="1" Value="15" ShowButtonSpinner="False" />
 		</StackPanel>
+		<StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,0,0,4">
+			<TextBlock Text="Hough Resolution"/>
+			<NumericUpDown x:Name="HoughResolution" Minimum="32" Maximum="2048" Increment="1" Value="512" ShowButtonSpinner="False" />
+		</StackPanel>
 		</StackPanel>
 
 		<TextBlock Grid.Row="3" x:Name="StatusText" Text="" TextWrapping="Wrap" Margin="0,4,0,0"/>

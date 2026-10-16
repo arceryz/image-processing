@@ -67,6 +67,7 @@ namespace ImageApp
 			HoughLineSegments,
 			BinaryPipeline,
 			GrayscalePipeline,
+			HoughMaximumNormalizer,
 		}
 
 		public MainWindow()
@@ -251,6 +252,7 @@ namespace ImageApp
 				byte maxGapLength = (byte)(LineMaxGapLength.Value ?? 4);
 				byte minLineLength = (byte)(LineMinLength.Value ?? 16);
 				byte houghClosingSize = (byte)(HoughClosingKernelSize.Value ?? 15);
+				int houghResolution = (int)(HoughResolution.Value ?? 512);
 
 				// Run computation and bitmap generation on a background task
 				// to keep the UI dispatcher thread responsive during heavy operations.
@@ -266,12 +268,17 @@ namespace ImageApp
 					
 					switch (selected)
 					{
+					case ProcessingFunctions.HoughMaximumNormalizer:
+					{
+						(_, _, int[,] counts) = NormalizedHoughTransform(gray, houghResolution);
+						return NormalizeIntImage(counts);
+					}
 					case ProcessingFunctions.GrayscalePipeline:
 					{
 						gray = ConvolveImage(gray, CreateGaussianFilter(kernelSize, sigma));
 						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 
-						(int[,] accumulator, Vector2 steps) = NormalizedHoughTransform(gray, 512);
+						(int[,] accumulator, Vector2 steps, _) = NormalizedHoughTransform(gray, houghResolution);
 						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
@@ -282,22 +289,22 @@ namespace ImageApp
 						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 						gray = ThresholdImage(gray, threshold);
 
-						(int[,] accumulator, Vector2 steps) = NormalizedHoughTransform(gray, 512);
+						(int[,] accumulator, Vector2 steps, _) = NormalizedHoughTransform(gray, houghResolution);
 						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
 					}
 					case ProcessingFunctions.HoughLineSegments:
 					{
-						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
-						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
-						var segments = HoughLineSegments(gray, peaks, threshold, 16, 4);
+						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, houghResolution);
+						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
 					}
 					case ProcessingFunctions.HoughPeakFinding:
 					{
-						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, 512);
-						(int[,] regionMap, Vector2[] rTheta) = HoughPeakFinding(accumulator, steps, 0.5f, 15);
+						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, houghResolution);
+						(int[,] regionMap, Vector2[] rTheta) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						foreach (Vector2 vec in rTheta)
 						{
 							Debug.Print($"r: {vec.X}, theta: {vec.Y}");
@@ -306,7 +313,7 @@ namespace ImageApp
 					}
 					case ProcessingFunctions.HoughTransform:
 					{
-						(int[,] accumulator, _) = HoughTransform(gray, 512);
+						(int[,] accumulator, _) = HoughTransform(gray, houghResolution);
 						byte[,] hough = NormalizeIntImage(accumulator);
 						return hough;
 					}
@@ -1352,7 +1359,7 @@ namespace ImageApp
 			return (accum, new Vector2(thetaStep, rStep));
 		}
 
-		(int[,], Vector2) NormalizedHoughTransform(byte[,] edgeImage, int nOutput)
+		(int[,], Vector2, int[,] maxCounts) NormalizedHoughTransform(byte[,] edgeImage, int nOutput)
 		{
 			int w = edgeImage.GetLength(0);
 			int h = edgeImage.GetLength(1);
@@ -1374,7 +1381,7 @@ namespace ImageApp
 				normalizedHough[x, y] = (byte)(255 * (float)hough[x, y] / Math.Max(1, maxCounts[x, y]));
 			}
 
-			return (normalizedHough, steps);
+			return (normalizedHough, steps, maxCounts);
 		}
 
 		private (int[,] regionMap, Vector2[]) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)

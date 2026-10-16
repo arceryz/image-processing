@@ -56,7 +56,7 @@ I have implemented a Binary and Grayscale Line Detection pipeline in the followi
 	\item Smooth the image using a varying Gaussian kernel.
 	\item Compute the Edge Magnitude image using horizontal and vertical Sobel kernels.
 	\item Apply thresholding from pixel value 75.
-	\item Compute the \textbf{Normalized} Hough Transform using a resolution of 512 pixels.
+	\item Compute the \textbf{Normalized} Hough Transform using a fixed resolution of 512 pixels.
 		I decided to use the normalized variant because the wideness of the tram image caused
 		most vertical lines to not pass the peak threshold and be lost. My implementation also
 		makes no distinction between the grayscale and binary implementation. Binary images will simply
@@ -93,6 +93,7 @@ corresponding to the front cabin. It also has the least number of lines, making 
 \section*{Task 2 | Grayscale Line Detection} %{{{1
 
 See Figure \ref{fig:task2}. A big noticeable difference between the Binary and Grayscale pipelines is that
+
 grayscale includes far more sporadic edges as a consequence of high-intensity and high-frequency regions of
 blurred lines. In the first Grayscale image, you can see that many diagonal lines are rendered
 in places with a high average magnitude (bright spot). This is both a strength and a weakness of
@@ -104,9 +105,24 @@ the tram head.
 
 In all three Grayscale edge images, I have kept all parameters except the blurring factor the same.
 This is because the Grayscale pipeline is most susceptible to noise because it does not threshold away any
-weak edges. In my opinion an optimal result is obtained for the image with gaussian kernel 7 (middle).
+weak edges. In my opinion an optimal result is obtained for the image with gaussian kernel size 7 (middle).
 This image shows both a strong fit on the key horizontal tram edges, and several more decent edges on 
 tram head and doors. This makes it on par, or even better than the third image in the Binary pipeline.
+It has a moderate blur that smoothens out high-frequency edges, while still retaining a high edge magnitude
+that allows the Hough Transform to detect them, contrary to the third image with kernel size 11.
+Minimum length was kept high similar to the Binary pipeline, this removed many of the smaller, sporadic edges.
+
+\section*{Extra 1 | Hough Transform Counting }
+
+As an extra I have used the code in my NormalizedHoughTransform() function to return the
+maximum accumulator array for the input image. The result when applied to the tram image can be seen in Figure \ref{fig:hough_max}.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=4cm]{results/maximum_tram.png}
+	\caption{Hough Maximum Counts 512x512 for a full white image in the same dimensions as the tram image.}
+	\label{fig:hough_max}
+\end{figure}
 
 \pagebreak
 
@@ -149,5 +165,6 @@ tram head and doors. This makes it on par, or even better than the third image i
 	Grayscale Line Detection pipeline applied to contrast adjusted tram image.}
 	\label{fig:task2}
 \end{figure}
+
 
 \end{document}
