@@ -281,7 +281,8 @@ namespace ImageApp
 						processImg = ConvolveImage(processImg, CreateGaussianFilter(3, 0.4f));
 
 						// Step 2: Threshold image.
-						processImg = ThresholdImage(processImg, 128);
+						//processImg = ThresholdImage(processImg, 128);
+						processImg = NiblackThreshold(processImg, 25, 0.17f, 7);
 
 						// Step 3: Close binary regions, remove small protrusions.
 						processImg = BinaryCloseImage(processImg, CreateSquareBinaryStructureElement(7));
@@ -294,17 +295,45 @@ namespace ImageApp
 						float maxAreaPercent = 0.3f;
 
 						int totalArea = processImg.GetLength(0) * processImg.GetLength(1);
+						List<(float, BinaryRegion)> candidateRegions = [];
+
 						for (int i = regions.Count-1; i >= 0; i--)
 						{
 							BinaryRegion reg = regions[i];
+							reg.ComputeCentroid();
+							reg.ComputeOrientation();
+							reg.ComputeBoundingBoxEstimate();
 
-							// Area Test.
-							bool invalidArea = reg.Area < totalArea * minAreaPercent || reg.Area > totalArea * maxAreaPercent;
-							if (invalidArea)
+							// Area tests.
+							bool isAreaTooSmall = reg.Area < totalArea * minAreaPercent;
+							bool isAreaTooLarge = reg.Area > totalArea * maxAreaPercent;
+
+							// Bounding box tests.
+							float boundingBoxAspectRatio = reg.BoundingBoxEstimate.X / reg.BoundingBoxEstimate.Y;
+							bool isNotRectangleShaped = boundingBoxAspectRatio < 3;
+
+							// Remove mini areas.
+							if (isAreaTooSmall)
+							{
+								regions.Remove(reg);
+							}
+							else if (isAreaTooLarge || isNotRectangleShaped)
 							{
 								reg.IsEnabled = false;
-								continue;
 							}
+							else
+							{
+								// Compute score for this candidate and store.
+								float score = reg.Perimeter * reg.Perimeter / reg.Area;
+								candidateRegions.Add((score, reg));
+							}
+						}
+
+						if (candidateRegions.Count > 0)
+						{
+							var sorted = candidateRegions.OrderBy(c => c.Item1).ToArray();
+							BinaryRegion topRegion = sorted.Last().Item2;
+							topRegion.DrawCheckered = true;
 						}
 
 						return CreateRegionColorImage(regionMap, regions);
@@ -1338,14 +1367,15 @@ namespace ImageApp
 			}
 
 			// Count area.
-			foreach (int l in labelMap)
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
 			{
-				if (l > 0)
+				int lb = labelMap[x, y];
+				if (lb > 0)
 				{
-					regions[l-1].Area++;
+					regions[lb-1].Coordinates.Add(new(x, y));
 				}
 			}
-
 			return (labelMap, regions);
 		}
 
@@ -1725,30 +1755,11 @@ namespace ImageApp
 				{
 					hsv = new HsvColor(hsv.A, hsv.H, hsv.S, 0.1f);
 				}
-				colors[i] = hsv.ToRgb();
+				reg.DrawRegion(image, hsv.ToRgb());
 			}
-
-			// Assign pixels the color of their region.
-			for (int x = 0; x < w; x++)
-			for (int y = 0; y < h; y++)
+			for (int i = 0; i < regions.Count; i++)
 			{
-				int lb = regionMap[x, y];
-				if (lb <= 0)
-					continue;
-				image[x, y] = colors[lb-1];
-			}
-
-			// Draw contours.
-			foreach (BinaryRegion reg in regions)
-			{
-				foreach (var contour in reg.Contours)
-				{
-					for (int i = 0; i < contour.Count; i++)
-					{
-						Coordinate point = contour[i];
-						image[point.X, point.Y] = reg.IsEnabled ? Colors.White: Colors.DarkSlateGray;
-					}
-				}
+				regions[i].DrawDebugOverlay(image, colors[i]);
 			}
 			return image;
 		}
@@ -1949,41 +1960,6 @@ namespace ImageApp
 			
 			// Clean up duplicates.
 			return goodCorners;
-		}
-
-		private Color[,] CreatePointOverlayImage(byte[,] sourceImage, List<Vector2> points, byte pointSize)
-		{
-			int w = sourceImage.GetLength(0);
-			int h = sourceImage.GetLength(1);
-
-			var overlay = new Color[w, h];
-			
-			// Copy sourceImage.
-			for (int x = 0; x < w; x++)
-			for (int y = 0; y < h; y++)
-			{
-				byte val = (byte)(0.3 * sourceImage[x, y]);
-				overlay[x, y] = new Color(255, val, val, val);
-			}
-			
-			int[,] filter = CreateRadialStructureElement(pointSize);
-
-			// Draw edges on top in red.
-			foreach (var pt in points)
-			{
-				for (int i = 0; i < filter.GetLength(0); i++)
-				for (int j = 0; j < filter.GetLength(1); j++)
-				{
-					int xl = i + (int)pt.X;
-					int yl = j + (int)pt.Y;
-					int val = filter[i, j];
-					if (xl < 0 || xl >= w || yl < 0 || yl >= h || val > 0)
-						continue;
-					overlay[xl, yl] = Colors.Red;
-				}
-			}
-
-			return overlay;
 		}
 	}
 }
