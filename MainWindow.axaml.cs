@@ -15,6 +15,11 @@ namespace ImageApp
 	
 	public partial class MainWindow : Window
 	{
+		static readonly Coordinate[] directions8 = [
+			new(1, 0), new(1, 1), new(0, 1), new(-1, 1),
+			new(-1, 0), new(-1, -1), new(0, -1), new(1, -1),
+		];
+
 		readonly sbyte[,] horizontalSobelKernel3x3 = { 
 			{ -1, -2, -1 },
 			{ 0, 0, 0 },
@@ -282,7 +287,7 @@ namespace ImageApp
 						processImg = BinaryCloseImage(processImg, CreateSquareBinaryStructureElement(7));
 						processImg = BinaryOpenImage(processImg, CreateSquareBinaryStructureElement(2));
 
-						(int[,] regionMap, List<ImageRegion> regions) = SequentialRegionLabeling(processImg);
+						(int[,] regionMap, List<BinaryRegion> regions) = CombinedRegionContourLabeling(processImg);
 
 						// Step 4: Pre-process regions to remove those that are invalid.
 						float minAreaPercent = 0.01f;
@@ -291,7 +296,7 @@ namespace ImageApp
 						int totalArea = processImg.GetLength(0) * processImg.GetLength(1);
 						for (int i = regions.Count-1; i >= 0; i--)
 						{
-							ImageRegion reg = regions[i];
+							BinaryRegion reg = regions[i];
 
 							// Area Test.
 							bool invalidArea = reg.Area < totalArea * minAreaPercent || reg.Area > totalArea * maxAreaPercent;
@@ -300,10 +305,6 @@ namespace ImageApp
 								reg.IsEnabled = false;
 								continue;
 							}
-
-							// Contour Test.
-							reg.ComputeRegion();
-							reg.ComputeContour();
 						}
 
 						return CreateRegionColorImage(regionMap, regions);
@@ -359,7 +360,7 @@ namespace ImageApp
 					}
 					case ProcessingFunctions.SequentialRegionLabeling:
 					{
-						(int[,] regionImg, List<ImageRegion> regions) = SequentialRegionLabeling(gray);
+						(int[,] regionImg, List<BinaryRegion> regions) = CombinedRegionContourLabeling(gray);
 						Debug.Print($"{regions.Count} regions");
 						return CreateRegionColorImage(regionImg, regions);
 					}
@@ -1266,112 +1267,151 @@ namespace ImageApp
 			return edgeMap;
 		}
 
-		// PART 2
-
-		(int[,], List<ImageRegion>) SequentialRegionLabeling(byte[,] input)
+		// This algorithm is the holy grail of region and contour finding.
+		(int[,], List<BinaryRegion>) CombinedRegionContourLabeling(byte[,] image)
 		{
-			int[,] outputLabels = new int[input.GetLength(0), input.GetLength(1)];
+			int w = image.GetLength(0);
+			int h = image.GetLength(1);
+			int[,] labelMap = new int[w, h];
 
-			// Define the 8 pixels in the neighborhood.
-			int[,] n8 = {
-				{ -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }
-			};
+			List<BinaryRegion> regions = [];
 
-			int w = input.GetLength(0);
-			int h = input.GetLength(1);
-			int numLabels = 0;
-
-			List<(int, int)> collisions = [];
-
-			// Step 1: Assign labels.
 			for (int y = 0; y < h; y++)
-			for (int x = 0; x < w; x++)
 			{
-				// Set default value.
-				if (input[x, y] == 0)
-				{
-					outputLabels[x, y] = 0;
-					continue;
-				}
+				// Iterating every row.
+				// Clear the label to background.
+				int prevLabel = 0;
 
-				// Determine smallest neighboring label, if any.
-				List<int> neighboringLabels = [];
-				for (int i = 0; i < 4; i++)
+				for (int x = 0; x < w; x++)
 				{
-					int nx = x + n8[i, 0];
-					int ny = y + n8[i, 1];
-					if (nx >= 0 && nx < w && ny >= 0)
+					if (image[x, y] > 0) // Is Foreground
 					{
-						// Add the label if it is not a background pixel.
-						int lb = outputLabels[nx, ny];
-						if (lb > 0)
+						// Case C: FG to FG.
+						// We copy the label of the previous pixel.
+						if (prevLabel > 0)
 						{
-							neighboringLabels.Add(lb);
+							labelMap[x, y] = prevLabel;
+						}
+						
+						// From BG to FG.
+						else
+						{ 
+							// Case A: New FG.
+							// Trace outer contour.
+							prevLabel = labelMap[x, y];
+							if (prevLabel == 0)
+							{
+								// Add new region.
+								BinaryRegion region = new();
+								regions.Add(region);
+								int regionLabel = regions.Count;
+
+								// Trace Contour.
+								var contour = TraceContour(image, labelMap, new(x, y), 0, regionLabel);
+								region.OuterContour = contour;
+								region.Contours.Add(contour);
+								prevLabel = regionLabel;
+							}
+						}
+					}
+					else // Is Background
+					{
+						// Came from a previous region pixel.
+						if (prevLabel > 0)
+						{
+							// Case B: FG to unseen BG.
+							// Trace new inner contour.
+							// This is where label -1 is needed to avoid BG that is already traced.
+							if (labelMap[x, y] == 0)
+							{
+								BinaryRegion region = regions[prevLabel-1];
+								var contour = TraceContour(image, labelMap, new(x-1, y), 1, prevLabel);
+								region.Contours.Add(contour);
+							}
+
+							// Clear previous region label.
+							// We are no longer on it.
+							prevLabel = 0;
 						}
 					}
 				}
+			}
 
-				int label = numLabels + 1;
-				if (neighboringLabels.Count == 0)
+			// Count area.
+			foreach (int l in labelMap)
+			{
+				if (l > 0)
 				{
-					numLabels++;
+					regions[l-1].Area++;
+				}
+			}
+
+			return (labelMap, regions);
+		}
+
+		List<Coordinate> TraceContour(byte[,] image, int[,] labelMap, Coordinate start, int dir, int label)
+		{
+			List<Coordinate> contour = [ start ];
+			labelMap[start.X, start.Y] = label;
+
+			// Find the next contour point.
+			// Set up the tracing.
+			(Coordinate firstNext, dir) = FindNextContourPoint(image, labelMap, start, dir);
+			Coordinate previous;
+			Coordinate current = firstNext;
+
+			// If next is the same, we are isolated.
+			bool done = start == firstNext;
+
+			while (!done)
+			{
+				// Assign label to next contour point.
+				labelMap[current.X, current.Y] = label;
+
+				// Can't go back or up, so start checking two rotation backwards.
+				dir = (dir + 6) % 8;
+
+				(Coordinate next, dir) = FindNextContourPoint(image, labelMap, current, dir);
+				previous = current;
+				current = next;
+
+				// Stop if we are following the same direction as previously.
+				done = previous == start && current == firstNext;
+				if (!done)
+				{
+					contour.Add(current);
+				}
+			}
+
+			return contour;
+		}
+
+		// Searches in 8 neighborhood for new point to trace to.
+		(Coordinate, int) FindNextContourPoint(byte[,] image, int[,] labels, Coordinate start, int dir)
+		{
+			for (int i = 0; i < 7; i++)
+			{
+				Coordinate p = start + directions8[dir];
+				bool outside = p.X < 0 || p.Y < 0 || p.X >= image.GetLength(0) || p.Y >= image.GetLength(1);
+
+				// Set BG to -1 to prevent double tracing.
+				if (outside || image[p.X, p.Y] == 0)
+				{
+					if (!outside) 
+					{
+						labels[p.X, p.Y] = -1;
+					}
+					dir = (dir + 1) % 8;
 				}
 				else
 				{
-					label = neighboringLabels[0];
-					if (neighboringLabels.Count > 1)
-					{
-						for (int i = 1; i < neighboringLabels.Count; i++)
-						{
-							collisions.Add((label, neighboringLabels[i]));
-						}
-					}
+					// Continue tracing along this point and remember the direction.
+					return (p, dir);
 				}
-				outputLabels[x, y] = label;
 			}
-
-			// Step 2: Resolve collisions.
 			
-			// Create initial partition of label sets.
-			List<List<int>> labelSets = [];
-			for (int i = 0; i < numLabels; i++)
-			{
-				labelSets.Add([ i+1 ]);
-			}
-
-			foreach (var (a, b) in collisions)
-			{
-				// Find sets containing these labels.
-				List<int> aSet = labelSets.Find((list) => list.Contains(a));
-				List<int> bSet = labelSets.Find((list) => list.Contains(b));
-
-				// Merge if not the same.
-				if (aSet != bSet)
-				{
-					aSet.AddRange(bSet.Except(aSet));
-					labelSets.Remove(bSet);
-				}
-			}
-
-			var regions = new List<ImageRegion>();
-			for (int i = 0; i < labelSets.Count; i++)
-			{
-				regions.Add(new ImageRegion());
-			}
-
-			// Step 3: Relabel image.
-			for (int x = 0; x < w; x++)
-			for (int y = 0; y < h; y++)
-			{
-				int label = outputLabels[x, y];
-				if (label == 0)
-					continue;
-				int regionIndex = labelSets.FindIndex((list) => list.Contains(label));
-				outputLabels[x, y] = regionIndex + 1;
-				regions[regionIndex].Coordinates.Add(new(x,y));
-			}
-
-			return (outputLabels, regions);
+			// No point found, return to start.
+			return (start, dir);
 		}
 
 		// Given a region-labeled image and num regions, compute the mean position of those regions.
@@ -1465,7 +1505,7 @@ namespace ImageApp
 			return (normalizedHough, steps, maxCounts);
 		}
 
-		private (int[,] regionMap, Vector2[], List<ImageRegion>) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)
+		private (int[,] regionMap, Vector2[], List<BinaryRegion>) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)
 		{
 			int w = accumulator.GetLength(0);
 
@@ -1487,7 +1527,7 @@ namespace ImageApp
 			temporary = BinaryCloseImage(temporary, CreateSquareBinaryStructureElement(closeStructureSize));
 
 			// Step 3: Region finding to get lines.
-			(int[,] regionMap, List<ImageRegion> regions) = SequentialRegionLabeling(temporary);
+			(int[,] regionMap, List<BinaryRegion> regions) = CombinedRegionContourLabeling(temporary);
 			Vector2[] regionMeans = GetRegionMeanPoints(regionMap, regions.Count);
 
 			// Turn the index representations of the means (rIndex, thetaIndex) into actual values.
@@ -1669,26 +1709,45 @@ namespace ImageApp
 			return bmp;
 		}
 
-		Color[,] CreateRegionColorImage(int[,] regionMap, List<ImageRegion> regions)
+		Color[,] CreateRegionColorImage(int[,] regionMap, List<BinaryRegion> regions)
 		{
 			int w = regionMap.GetLength(0);
 			int h = regionMap.GetLength(1);
-			Color[] colors = GetRandomColors(regions.Count);
 			var image = new Color[w, h];
 
+			// Disabled regions get a darker color.
+			Color[] colors = GetRandomColors(regions.Count);
 			for (int i = 0; i < regions.Count; i++)
 			{
-				ImageRegion reg = regions[i];
+				BinaryRegion reg = regions[i];
 				HsvColor hsv = colors[i].ToHsv();
 				if (!reg.IsEnabled)
 				{
-					hsv = new HsvColor(hsv.A, hsv.H, hsv.S, 0.2f);
+					hsv = new HsvColor(hsv.A, hsv.H, hsv.S, 0.1f);
 				}
-				Color col = hsv.ToRgb();
+				colors[i] = hsv.ToRgb();
+			}
 
-				foreach (Coordinate coord in reg.Coordinates)
+			// Assign pixels the color of their region.
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				int lb = regionMap[x, y];
+				if (lb <= 0)
+					continue;
+				image[x, y] = colors[lb-1];
+			}
+
+			// Draw contours.
+			foreach (BinaryRegion reg in regions)
+			{
+				foreach (var contour in reg.Contours)
 				{
-					image[coord.X, coord.Y] = col;
+					for (int i = 0; i < contour.Count; i++)
+					{
+						Coordinate point = contour[i];
+						image[point.X, point.Y] = reg.IsEnabled ? Colors.White: Colors.DarkSlateGray;
+					}
 				}
 			}
 			return image;
