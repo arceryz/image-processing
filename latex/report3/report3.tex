@@ -1,0 +1,51 @@
+% 
+% Assignment 1 for Image Processing.
+% Timothy van der Valk.
+% 2336715.
+%
+
+% Preamble {{{1
+\documentclass[10pt, a4paper]{article}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{xfrac}
+
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{2pt}
+
+\newcommand{\imagecell}[2]{%
+	\begin{minipage}[t]{\linewidth}
+		\centering
+		\includegraphics[
+		height=30mm,
+		keepaspectratio
+		]{#1}\\
+		{\scriptsize #2}
+	\end{minipage}%
+}
+
+\newcommand{\bigimagecell}[3]{%
+	\begin{minipage}[t]{\linewidth}
+		\centering
+		\includegraphics[
+		height=#3,
+		keepaspectratio
+		]{#1}\\
+		{\scriptsize #2}
+	\end{minipage}%
+}
+
+\title{Piano Keyboard Detection}
+\author{Image Processing Assignment 3\\Timothy van der Valk (2336715)}
+
+\begin{document}
+\maketitle
+
+\end{document}

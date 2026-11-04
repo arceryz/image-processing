@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -13,6 +12,7 @@ using System.Numerics;
 
 namespace ImageApp
 {
+	
 	public partial class MainWindow : Window
 	{
 		readonly sbyte[,] horizontalSobelKernel3x3 = { 
@@ -44,6 +44,7 @@ namespace ImageApp
 		// You need to add those dropdown entries yourself as part of implementing them.
 		private enum ProcessingFunctions
 		{
+			PianoKeyboardDetection,
 			ConvertToGrayscale,
 			InvertImage,
 			AdjustContrast,
@@ -268,6 +269,45 @@ namespace ImageApp
 					
 					switch (selected)
 					{
+					case ProcessingFunctions.PianoKeyboardDetection:
+					{
+						// Step 1: Resize the image for region detection.
+						byte[,] processImg = ScaleImage(gray, 1280);
+						processImg = ConvolveImage(processImg, CreateGaussianFilter(3, 0.4f));
+
+						// Step 2: Threshold image.
+						processImg = ThresholdImage(processImg, 128);
+
+						// Step 3: Close binary regions, remove small protrusions.
+						processImg = BinaryCloseImage(processImg, CreateSquareBinaryStructureElement(7));
+						processImg = BinaryOpenImage(processImg, CreateSquareBinaryStructureElement(2));
+
+						(int[,] regionMap, List<ImageRegion> regions) = SequentialRegionLabeling(processImg);
+
+						// Step 4: Pre-process regions to remove those that are invalid.
+						float minAreaPercent = 0.01f;
+						float maxAreaPercent = 0.3f;
+
+						int totalArea = processImg.GetLength(0) * processImg.GetLength(1);
+						for (int i = regions.Count-1; i >= 0; i--)
+						{
+							ImageRegion reg = regions[i];
+
+							// Area Test.
+							bool invalidArea = reg.Area < totalArea * minAreaPercent || reg.Area > totalArea * maxAreaPercent;
+							if (invalidArea)
+							{
+								reg.IsEnabled = false;
+								continue;
+							}
+
+							// Contour Test.
+							reg.ComputeRegion();
+							reg.ComputeContour();
+						}
+
+						return CreateRegionColorImage(regionMap, regions);
+					}
 					case ProcessingFunctions.HoughMaximumNormalizer:
 					{
 						(_, _, int[,] counts) = NormalizedHoughTransform(gray, houghResolution);
@@ -279,7 +319,7 @@ namespace ImageApp
 						(gray, _, _, _) = EdgeMagnitude(gray, horizontalSobelKernel3x3, verticalSobelKernel3x3);
 
 						(int[,] accumulator, Vector2 steps, _) = NormalizedHoughTransform(gray, houghResolution);
-						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						(int[,] regionMap, Vector2[] peaks, _) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
 					}
@@ -290,21 +330,21 @@ namespace ImageApp
 						gray = ThresholdImage(gray, threshold);
 
 						(int[,] accumulator, Vector2 steps, _) = NormalizedHoughTransform(gray, houghResolution);
-						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						(int[,] regionMap, Vector2[] peaks, _) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
 					}
 					case ProcessingFunctions.HoughLineSegments:
 					{
 						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, houghResolution);
-						(int[,] regionMap, Vector2[] peaks) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						(int[,] regionMap, Vector2[] peaks, _) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						var segments = HoughLineSegments(gray, peaks, minLineIntensity, minLineLength, maxGapLength);
 						return CreateLineSegmentOverlayImage(gray, segments);
 					}
 					case ProcessingFunctions.HoughPeakFinding:
 					{
 						(int[,] accumulator, Vector2 steps) = HoughTransform(gray, houghResolution);
-						(int[,] regionMap, Vector2[] rTheta) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
+						(int[,] regionMap, Vector2[] rTheta, _) = HoughPeakFinding(accumulator, steps, peakThresholdPercent, houghClosingSize);
 						foreach (Vector2 vec in rTheta)
 						{
 							Debug.Print($"r: {vec.X}, theta: {vec.Y}");
@@ -319,9 +359,9 @@ namespace ImageApp
 					}
 					case ProcessingFunctions.SequentialRegionLabeling:
 					{
-						(int[,] regionImg, int numRegions) = SequentialRegionLabeling(gray);
-						Debug.Print($"{numRegions} regions");
-						return CreateRegionColorImage(regionImg, numRegions);
+						(int[,] regionImg, List<ImageRegion> regions) = SequentialRegionLabeling(gray);
+						Debug.Print($"{regions.Count} regions");
+						return CreateRegionColorImage(regionImg, regions);
 					}
 					case ProcessingFunctions.Extra1CannyEdgeDetection:
 					{
@@ -393,7 +433,7 @@ namespace ImageApp
 						break;
 					}
 					case ProcessingFunctions.ThresholdImage:
-					gray = ThresholdImage(gray, _threshold);
+					gray = ThresholdImage(gray, threshold);
 					break;
 					case ProcessingFunctions.BinaryErodeImage:
 					{
@@ -631,6 +671,40 @@ namespace ImageApp
 				}
 
 				tempImage[x, y] = (byte)MathF.Min(sum, 255);
+			}
+
+			return tempImage;
+		}
+
+		private float[,] ConvolveImage(float[,] inputImage, float[,] filter)
+		{
+			// create temporary grayscale image
+			var tempImage = new float[inputImage.GetLength(0), inputImage.GetLength(1)];
+			int w = inputImage.GetLength(0);
+			int h = inputImage.GetLength(1);
+
+			int filterSizeX = filter.GetLength(0);
+			int filterSizeY = filter.GetLength(1);
+			int filterCenterX = (filterSizeX-1) / 2;
+			int filterCenterY = (filterSizeY-1) / 2;
+
+			// Iterate the image in (x,y), and apply a mirroring-filter to it.
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				// Sum all the values in the filter for this pixel.
+				float sum = 0;
+
+				for (int i = 0; i < filterSizeX; i++)
+				for (int j = 0; j < filterSizeY; j++)
+				{
+					int sx = MirrorRepeat(x + i - filterCenterX, w);
+					int sy = MirrorRepeat(y + j - filterCenterY, h);
+
+					sum += inputImage[sx, sy] * filter[i, j];
+				}
+
+				tempImage[x, y] = sum;
 			}
 
 			return tempImage;
@@ -1194,7 +1268,7 @@ namespace ImageApp
 
 		// PART 2
 
-		(int[,], int) SequentialRegionLabeling(byte[,] input)
+		(int[,], List<ImageRegion>) SequentialRegionLabeling(byte[,] input)
 		{
 			int[,] outputLabels = new int[input.GetLength(0), input.GetLength(1)];
 
@@ -1279,6 +1353,12 @@ namespace ImageApp
 				}
 			}
 
+			var regions = new List<ImageRegion>();
+			for (int i = 0; i < labelSets.Count; i++)
+			{
+				regions.Add(new ImageRegion());
+			}
+
 			// Step 3: Relabel image.
 			for (int x = 0; x < w; x++)
 			for (int y = 0; y < h; y++)
@@ -1288,9 +1368,10 @@ namespace ImageApp
 					continue;
 				int regionIndex = labelSets.FindIndex((list) => list.Contains(label));
 				outputLabels[x, y] = regionIndex + 1;
+				regions[regionIndex].Coordinates.Add(new(x,y));
 			}
 
-			return (outputLabels, labelSets.Count);
+			return (outputLabels, regions);
 		}
 
 		// Given a region-labeled image and num regions, compute the mean position of those regions.
@@ -1384,7 +1465,7 @@ namespace ImageApp
 			return (normalizedHough, steps, maxCounts);
 		}
 
-		private (int[,] regionMap, Vector2[]) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)
+		private (int[,] regionMap, Vector2[], List<ImageRegion>) HoughPeakFinding(int[,] accumulator, Vector2 rThetaSteps, float peakThresholdPercent, int closeStructureSize=15)
 		{
 			int w = accumulator.GetLength(0);
 
@@ -1406,17 +1487,17 @@ namespace ImageApp
 			temporary = BinaryCloseImage(temporary, CreateSquareBinaryStructureElement(closeStructureSize));
 
 			// Step 3: Region finding to get lines.
-			(int[,] regionMap, int numRegions) = SequentialRegionLabeling(temporary);
-			Vector2[] regionMeans = GetRegionMeanPoints(regionMap, numRegions);
+			(int[,] regionMap, List<ImageRegion> regions) = SequentialRegionLabeling(temporary);
+			Vector2[] regionMeans = GetRegionMeanPoints(regionMap, regions.Count);
 
 			// Turn the index representations of the means (rIndex, thetaIndex) into actual values.
-			for (int i = 0; i < numRegions; i++)
+			for (int i = 0; i < regions.Count; i++)
 			{
 				Vector2 mean = regionMeans[i];
 				regionMeans[i] = new Vector2((mean.Y - w/2) * rThetaSteps.Y, mean.X * rThetaSteps.X);
 			}
 		
-			return (regionMap, regionMeans);
+			return (regionMap, regionMeans, regions);
 		}
 
 		private List<(Vector2, Vector2)> HoughLineSegments(byte[,] edgeImage, Vector2[] rThetaPeaks, int minIntensity, int minSegmentLength, int maxGap)
@@ -1588,6 +1669,31 @@ namespace ImageApp
 			return bmp;
 		}
 
+		Color[,] CreateRegionColorImage(int[,] regionMap, List<ImageRegion> regions)
+		{
+			int w = regionMap.GetLength(0);
+			int h = regionMap.GetLength(1);
+			Color[] colors = GetRandomColors(regions.Count);
+			var image = new Color[w, h];
+
+			for (int i = 0; i < regions.Count; i++)
+			{
+				ImageRegion reg = regions[i];
+				HsvColor hsv = colors[i].ToHsv();
+				if (!reg.IsEnabled)
+				{
+					hsv = new HsvColor(hsv.A, hsv.H, hsv.S, 0.2f);
+				}
+				Color col = hsv.ToRgb();
+
+				foreach (Coordinate coord in reg.Coordinates)
+				{
+					image[coord.X, coord.Y] = col;
+				}
+			}
+			return image;
+		}
+
 		Color[,] CreateRegionColorImage(int[,] regionMap, int numRegions)
 		{
 			int w = regionMap.GetLength(0);
@@ -1595,12 +1701,15 @@ namespace ImageApp
 			Color[] colors = GetRandomColors(numRegions);
 			var image = new Color[w, h];
 
-			for (int x = 0; x < regionMap.GetLength(0); x++)
-				for (int y = 0; y < regionMap.GetLength(1); y++)
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				int lb = regionMap[x, y];
+				if (lb > 0)
 				{
-					int lb = regionMap[x, y];
-					image[x, y] = lb > 0 ? colors[lb - 1]: Colors.Black;
+					image[x, y] = colors[lb-1];
 				}
+			}
 			return image;
 		}
 
@@ -1636,6 +1745,186 @@ namespace ImageApp
 			}
 
 			return output;
+		}
+
+		// Simple nearest-filtering scale operation.
+		// Ensure that image is maxWidth if it is larger than that.
+		byte[,] ScaleImage(byte[,] input, int maxWidth)
+		{
+			int w = input.GetLength(0);
+			int h = input.GetLength(1);
+			float scalePercent = maxWidth / (float)w;
+
+			int nw = (int)(w*scalePercent);
+			int nh = (int)(h*scalePercent);
+			byte[,] output = new byte[nw, nh];
+
+			for (int x = 0; x < nw; x++)
+			for (int y = 0; y < nh; y++)
+			{
+				output[x, y] = input[
+					Math.Min(w-1, (int)(x / scalePercent)),
+					Math.Min(h-1, (int)(y / scalePercent))
+				];
+			}
+
+			return output;
+		}
+
+		// Compute Niblack local threshold for image.
+		byte[,] NiblackThreshold(byte[,] input, int r, float k, float d)
+		{
+			int w = input.GetLength(0);
+			int h = input.GetLength(1);
+			byte[,] output = new byte[w, h];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				// Compute local mean and variance.
+				float sum = 0;
+				float sumsq = 0;
+				int n = 0;
+
+				for (int i = -r; i <= r; i++)
+				for (int j = -r; j <= r; j++)
+				{
+					int xl = x+i;
+					int yl = y+j;
+					if (xl <= 0 || xl >= w || yl <= 0 || yl >= h)
+						continue;
+					n += 1;
+					int val = input[xl, yl];
+					sum += val;
+					sumsq += val*val;
+				}
+
+				float mean = sum / n;
+				float sd = MathF.Sqrt(sumsq / n - mean*mean);
+
+				// Apply threshold.
+				float localThreshold = mean + k*sd + d;
+				output[x, y] = (byte)(input[x, y] >= localThreshold ? 255: 0);
+			}
+
+			return output;
+		}
+
+		List<Vector2> HarrisCornerDetector(byte[,] input, float sigma, float k, float rthreshold, int r)
+		{
+			int w = input.GetLength(0);
+			int h = input.GetLength(1);
+
+			(_, _, float[,] dxMap, float[,] dyMap) = EdgeMagnitude(input, horizontalSobelKernel3x3, verticalSobelKernel3x3);
+			var dx2map = new float[w, h];
+			var dy2map = new float[w, h];
+			var dxdymap = new float[w, h];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				float dx = dxMap[x, y];
+				float dy = dyMap[x, y];
+				dx2map[x, y] = dx*dx;
+				dy2map[x, y] = dy*dy;
+				dxdymap[x, y] = dx*dy;
+			}
+
+			float[,] gaussian = CreateGaussianFilter((byte)(5*sigma+1), sigma);
+			dx2map = ConvolveImage(dx2map, gaussian);
+			dy2map = ConvolveImage(dy2map, gaussian);
+			dxdymap = ConvolveImage(dxdymap, gaussian);
+
+			// Compute corner responses.
+			var cornerResponses = new float[w, h];
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				float a = dx2map[x, y];
+				float b = dy2map[x, y];
+				float c = dxdymap[x, y];
+				float det = a*b - c*c;
+				float trace = a + b;
+
+				float response = det - k * trace*trace;
+				cornerResponses[x, y] = response;
+			}
+
+			// Compute corners from local max.
+			List<(float, Vector2)> corners = [];
+
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				float response = cornerResponses[x, y];
+				bool isLocalMax = true;
+				for (int i = -r; i <= r; i++)
+				for (int j = -r; j <= r; j++)
+				{
+					int xl = x + i;
+					int yl = j + i;
+					if (xl < 0 || xl >= w || yl < 0 || yl > h)
+						continue;
+					if (cornerResponses[xl, yl] > response)
+					{
+						isLocalMax = false;
+						goto exitloop; 
+					}
+				}
+			exitloop:
+				if (response > rthreshold && isLocalMax)
+				{
+					corners.Add((response, new(x, y)));
+				}
+			}
+
+			corners.Sort((a, b) => 
+			{
+				return a.Item1 > b.Item1 ? -1: (a.Item1 == b.Item1 ? 0: 1);
+			});
+			List<Vector2> goodCorners = [];
+			foreach (var c in corners)
+			{
+				goodCorners.Add(c.Item2);
+			}
+			
+			// Clean up duplicates.
+			return goodCorners;
+		}
+
+		private Color[,] CreatePointOverlayImage(byte[,] sourceImage, List<Vector2> points, byte pointSize)
+		{
+			int w = sourceImage.GetLength(0);
+			int h = sourceImage.GetLength(1);
+
+			var overlay = new Color[w, h];
+			
+			// Copy sourceImage.
+			for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+			{
+				byte val = (byte)(0.3 * sourceImage[x, y]);
+				overlay[x, y] = new Color(255, val, val, val);
+			}
+			
+			int[,] filter = CreateRadialStructureElement(pointSize);
+
+			// Draw edges on top in red.
+			foreach (var pt in points)
+			{
+				for (int i = 0; i < filter.GetLength(0); i++)
+				for (int j = 0; j < filter.GetLength(1); j++)
+				{
+					int xl = i + (int)pt.X;
+					int yl = j + (int)pt.Y;
+					int val = filter[i, j];
+					if (xl < 0 || xl >= w || yl < 0 || yl >= h || val > 0)
+						continue;
+					overlay[xl, yl] = Colors.Red;
+				}
+			}
+
+			return overlay;
 		}
 	}
 }
