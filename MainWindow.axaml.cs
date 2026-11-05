@@ -303,6 +303,7 @@ namespace ImageApp
 							reg.ComputeCentroid();
 							reg.ComputeOrientation();
 							reg.ComputeBoundingBoxEstimate();
+							reg.ComputeCorners();
 
 							// Area tests.
 							bool isAreaTooSmall = reg.Area < totalArea * minAreaPercent;

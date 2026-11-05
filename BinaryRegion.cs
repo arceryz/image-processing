@@ -33,6 +33,9 @@ public class BinaryRegion
 	public List<Coordinate> OuterContour = [];
 	public List<List<Coordinate>> Contours = [];
 	public List<Coordinate> Coordinates = [];
+	public List<Coordinate> Corners = [];
+	public List<float> XProjections = [];
+	public List<float> YProjections = [];
 
 	public bool IsEnabled = true;
 	public bool DrawCheckered = false;
@@ -75,13 +78,8 @@ public class BinaryRegion
 	// Compute bounding box by projecting onto orientation.
 	public void ComputeBoundingBoxEstimate()
 	{
-		// By tracking min/max along the orientation axis, we can get
-		// a good sense of the extents of the bounding box.
-		// Is sensitive to outliers, which is why protrusions were minimized in preprocessing.
-		float minX = float.MaxValue;
-		float maxX = float.MinValue;
-		float minY = float.MaxValue;
-		float maxY = float.MinValue;
+		XProjections = [];
+		YProjections = [];
 
 		foreach (Coordinate point in Coordinates)
 		{
@@ -89,13 +87,121 @@ public class BinaryRegion
 			float xp = Vector2.Dot(diff, MajorAxis);
 			float yp = Vector2.Dot(diff, MinorAxis);
 
-			minX = MathF.Min(minX, xp);
-			maxX = MathF.Max(maxX, xp);
-			minY = MathF.Min(minY, yp);
-			maxY = MathF.Max(maxY, yp);
+			XProjections.Add(xp);
+			YProjections.Add(yp);
 		}
 
+		XProjections.Sort();
+		YProjections.Sort();
+
+		// The quantile at which we take the X position.
+		float edgeQuantile = 0.02f;
+
+		float minX = XProjections[(int)(XProjections.Count * edgeQuantile)];
+		float maxX = XProjections[(int)(XProjections.Count * (1-edgeQuantile))];
+		float minY = YProjections[(int)(YProjections.Count * edgeQuantile)];
+		float maxY = YProjections[(int)(YProjections.Count * (1-edgeQuantile))];
+
 		BoundingBoxEstimate = new(maxX - minX, maxY - minY);
+	}
+
+	// Find points along the contour that are most likely to be corners.
+	public void ComputeCorners()
+	{
+		int step = 10;
+		int maximumRadius = 10;
+		if (OuterContour.Count < step)
+		{
+			return;
+		}
+
+		var scores = new float[OuterContour.Count];
+
+		for (int i = 0; i < OuterContour.Count; i++)
+		{
+			Vector2 center = OuterContour[i];
+			Vector2 sumBack = OuterContour[(i + OuterContour.Count - step) % OuterContour.Count] - center;
+			Vector2 sumForward = OuterContour[(i+step) % OuterContour.Count] - center;
+
+			float lenBack = sumBack.Length() + 0.01f;
+			float lenForward = sumForward.Length() + 0.01f;
+
+			sumBack /= lenBack;
+			sumForward /= lenForward;
+
+			float dotp = Vector2.Dot(sumBack, sumForward);
+			float score = 1.0f - MathF.Abs(dotp);
+			scores[i] = score;
+		}
+
+		Corners = [];
+
+		for (int i = 0; i < OuterContour.Count; )
+		{
+			float max = scores[i];
+			for (int j = 1; j <= maximumRadius; j++)
+			{
+				max = MathF.Max(max, scores[(i + OuterContour.Count - j) % OuterContour.Count]);
+				max = MathF.Max(max, scores[(i + j) % OuterContour.Count]);
+			}
+
+			if (scores[i] == max && max > 0.5f)
+			{
+				Corners.Add(OuterContour[i]);
+				i += maximumRadius+1;
+			}
+			else
+			{
+				i += 1;
+			}
+		}
+	}
+
+	// Computes the best fitting line through the points in the upper Y-quantiles (bottom) and
+	// inner X-quantiles (middle). If the region is rectangular, this gives a good fit through the bottom edge.
+	private void ComputeBestFitBottomLine()
+	{
+		List<Coordinate> bottomPoints = [];
+		Vector2 mean = Vector2.Zero;
+
+		float lowerX = XProjections[(int)(XProjections.Count * 0.2f)];
+		float upperX = XProjections[(int)(XProjections.Count * 0.8f)];
+		float upperY = XProjections[(int)(XProjections.Count * 0.9f)];
+
+		// Extract lower contour points.
+		for (int i = 0; i < OuterContour.Count; i += 10)
+		{
+			Coordinate point = OuterContour[i];
+			Vector2 diff = point - Centroid;
+			float xp = Vector2.Dot(diff, MajorAxis);
+			float yp = Vector2.Dot(diff, MinorAxis);
+
+			if (lowerX <= xp && xp <= upperX && yp >= upperY)
+			{
+				bottomPoints.Add(point);
+				mean += point;
+			}
+		}
+
+		// Compute best-fit line using least squares.
+		mean /= bottomPoints.Count;
+		float xySum = 0;
+		float xxSum = 0;
+
+		foreach (var coord in bottomPoints)
+		{
+			float dx = coord.X - mean.X;
+			xySum += dx * (coord.Y - mean.Y);
+			xxSum += dx * dx;
+		}
+
+		float slope = xySum / xxSum;
+		float intercept = mean.Y - slope * mean.X;
+	}
+
+	private void ComputeBestFitTopCornerLine()
+	{
+
 	}
 
 	// Computes the central moment for given p and q.
@@ -144,5 +250,10 @@ public class BinaryRegion
 		DrawingTools.DrawLine(image, Colors.White, bl, tl);
 
 		DrawingTools.DrawDot(image, color, Centroid, 16);
+
+		foreach (var corner in Corners)
+		{
+			DrawingTools.DrawDot(image, color, corner, 8);
+		}
 	}
 }
