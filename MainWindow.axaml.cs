@@ -270,7 +270,6 @@ namespace ImageApp
 					byte[,] gray = ConvertToGrayscale(colorPixels);
 					int w = gray.GetLength(0);
 					int h = gray.GetLength(1);
-					Color[,] colorImg = new Color[gray.GetLength(0), gray.GetLength(1)];
 					
 					switch (selected)
 					{
@@ -300,41 +299,48 @@ namespace ImageApp
 						for (int i = regions.Count-1; i >= 0; i--)
 						{
 							BinaryRegion reg = regions[i];
-							reg.ComputeCentroid();
-							reg.ComputeOrientation();
-							reg.ComputeBoundingBoxEstimate();
-							reg.ComputeCorners();
 
 							// Area tests.
 							bool isAreaTooSmall = reg.Area < totalArea * minAreaPercent;
 							bool isAreaTooLarge = reg.Area > totalArea * maxAreaPercent;
 
-							// Bounding box tests.
+							if (isAreaTooSmall) 
+							{
+								regions.Remove(reg);
+								continue;
+							} 
+							else if (isAreaTooLarge) 
+							{
+								reg.IsEnabled = false;
+								continue;
+							}
+
+							// Aspect ratio test.
+							reg.ComputeBoundingBoxEstimate();
 							float boundingBoxAspectRatio = reg.BoundingBoxEstimate.X / reg.BoundingBoxEstimate.Y;
 							bool isNotRectangleShaped = boundingBoxAspectRatio < 3;
 
-							// Remove mini areas.
-							if (isAreaTooSmall)
-							{
-								regions.Remove(reg);
-							}
-							else if (isAreaTooLarge || isNotRectangleShaped)
+							if (isNotRectangleShaped) 
 							{
 								reg.IsEnabled = false;
+								continue;
 							}
-							else
-							{
-								// Compute score for this candidate and store.
-								float score = reg.Perimeter * reg.Perimeter / reg.Area;
-								candidateRegions.Add((score, reg));
-							}
+
+							// Compute score for this candidate and store.
+							reg.ComputeCorners();
+							reg.ComputeRefinedBoundingBoxEstimate();
+
+							float score = reg.Perimeter * reg.Perimeter / reg.Area;
+							candidateRegions.Add((score, reg));
 						}
 
+						var colorImage = ConvertToColorImage(colorPixels, 1280);
 						if (candidateRegions.Count > 0)
 						{
 							var sorted = candidateRegions.OrderBy(c => c.Item1).ToArray();
 							BinaryRegion topRegion = sorted.Last().Item2;
 							topRegion.DrawCheckered = true;
+							topRegion.DrawRefinedBoundingBox(colorImage, Colors.Red);
 						}
 
 						return CreateRegionColorImage(regionMap, regions);
@@ -398,6 +404,7 @@ namespace ImageApp
 					{
 						(int[,] classes, int numClasses) = CannyEdgeDetection(gray, sigma, hysterLow, hysterHigh);
 						Color[] colors = GetRandomColors(numClasses);
+						Color[,] colorImg = new Color[gray.GetLength(0), gray.GetLength(1)];
 
 						// Create the image data.
 						for (int x = 0; x < w; x++)
@@ -1879,6 +1886,30 @@ namespace ImageApp
 			}
 
 			return output;
+		}
+
+		private static Color[,] ConvertToColorImage(byte[,,] colorPixels, int maxWidth)
+		{
+			int w = colorPixels.GetLength(0);
+			int h = colorPixels.GetLength(1);
+			float scalePercent = maxWidth / (float)w;
+			int nw = (int)(w*scalePercent);
+			int nh = (int)(h*scalePercent);
+			var color = new Color[nw, nh];
+
+			for (int nx = 0; nx < nw; nx++)
+			for (int ny = 0; ny < nh; ny++)
+			{
+				int x = Math.Min(w-1, (int)(nx / scalePercent));
+				int y = Math.Min(h-1, (int)(ny / scalePercent));
+
+				byte r = colorPixels[x, y, 0];
+				byte g = colorPixels[x, y, 1];
+				byte b = colorPixels[x, y, 2];
+				
+				color[nx, ny] = new Color(255, r, g, b);
+			}
+			return color;
 		}
 
 		List<Vector2> HarrisCornerDetector(byte[,] input, float sigma, float k, float rthreshold, int r)
